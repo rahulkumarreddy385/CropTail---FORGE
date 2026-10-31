@@ -1,0 +1,12 @@
+node_modules/
+.next/
+__pycache__/
+.pytest_cache/
+server/.env
+server/.cache/
+server/uploads/
+server/*.db
+client/.env*
+!client/.env
+
+server/secrets/

@@ -1,0 +1,12 @@
+fastapi>=0.115
+uvicorn[standard]>=0.30
+httpx>=0.27
+pydantic>=2.7
+python-multipart>=0.0.9
+reportlab>=4.2
+matplotlib>=3.8
+pillow>=10.4
+pytest>=8.0
+pypdf>=4.0
+# Optional: live Sentinel-2 NDVI (needs a GEE service account)
+# earthengine-api>=1.1
