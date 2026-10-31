@@ -12,7 +12,7 @@ CropTrail
 
 ### Overview
 
-CropTrail is a mobile-first web app (a web frontend talking to a backend over a JSON HTTP API) that acts as a "farm memory with a brain" for small farmers. It has four layers: a **ledger** that turns quick text, voice or photo logs into structured farm records; a **climate intelligence layer** that combines weather forecasts, observed weather history and Sentinel-2 satellite crop-health (NDVI) for each plot; a **bounded agent** that answers questions only by calling ledger, weather, satellite and price tools; and an **evidence engine** that detects severe weather over a farmer's plots, opens a suspected loss event, and assembles a claim-ready PDF evidence pack.
+CropTrail is a mobile-first web app (a web client talking to a server over a JSON HTTP API) that acts as a "farm memory with a brain" for small farmers. It has four layers: a **ledger** that turns quick text, voice or photo logs into structured farm records; a **climate intelligence layer** that combines weather forecasts, observed weather history and Sentinel-2 satellite crop-health (NDVI) for each plot; a **bounded agent** that answers questions only by calling ledger, weather, satellite and price tools; and an **evidence engine** that detects severe weather over a farmer's plots, opens a suspected loss event, and assembles a claim-ready PDF evidence pack.
 
 Primary journey: farmer logs activities through the season → CropTrail keeps a per-plot ledger and risk score → severe weather is observed over a plot → the app alerts the farmer, starts a 72-hour reporting countdown, and generates an evidence pack combining the farmer's records, photos, weather data and satellite change.
 
@@ -69,7 +69,7 @@ Scope: a 48-hour hackathon MVP for a live demo with one seeded farmer, built end
 
 **Must-have**
 1. **F1 Plot and season setup**: create/edit plots (name, area in acres, location pin) and seasons (crop, season label, sowing date). A plot can have many seasons; only one season per plot is `active`.
-2. **F2 Quick log (parse + confirm)**: the user types a free-text entry in Hindi, English or mixed; the backend parses it into a draft structured entry; the UI shows a confirm card the user can edit; nothing is saved until the user taps Confirm.
+2. **F2 Quick log (parse + confirm)**: the user types a free-text entry in Hindi, English or mixed; the server parses it into a draft structured entry; the UI shows a confirm card the user can edit; nothing is saved until the user taps Confirm.
 3. **F3 Ledger view**: per-plot, per-season timeline of entries grouped by date, with category icons, running total cost, and filters by category.
 4. **F4 Season metrics**: deterministic totals per season: total cost, cost by category, harvested quantity, cost per quintal, revenue, profit.
 5. **F5 Agent Q&A**: the user asks a question; a bounded agent (max 6 tool calls) answers using only the allowlisted tools in section 6 and shows the source records/data it used.
@@ -80,7 +80,7 @@ Scope: a 48-hour hackathon MVP for a live demo with one seeded farmer, built end
 10. **F10 Satellite crop-health change**: Sentinel-2 NDVI for the plot before vs after an event, plus an NDVI time series for the season, with a cached fallback for demo plots.
 11. **F11 Evidence pack PDF**: one tap generates a PDF for a confirmed event: farmer/plot/crop details, ledger timeline, area weather vs normal, satellite before/after, photo timeline, farmer-entered loss estimate, disclaimer.
 12. **F12 Demo data and reset**: seeded farmer, plots, seasons and entries; one action resets to the seed.
-13. **F13 Health check**: reports backend status and which integrations are live vs fallback.
+13. **F13 Health check**: reports server status and which integrations are live vs fallback.
 
 **Should-have**
 14. **F14 Photo log**: upload/capture a photo; store with timestamp and location; optional vision tag (`healthy`, `pest_damage`, `waterlogging`, `lodging`, `unclear`) shown as a hint, never a diagnosis.
@@ -167,7 +167,7 @@ All dates ISO `YYYY-MM-DD`, timestamps ISO 8601 with offset, currency INR (₹) 
 - **Open-Meteo Forecast API**: hourly/daily forecast (precipitation, precipitation probability, temperature, wind speed/gusts, weather code) and recent observed days via `past_days`. No key.
 - **Open-Meteo Historical (archive) API**: observed daily weather for older dates and 1991-2020 normals. No key.
 - **Sentinel-2 L2A via Google Earth Engine**: NDVI with cloud masking. Credentials via `GEE_SERVICE_ACCOUNT_JSON`.
-- **Agmarknet mandi prices via data.gov.in API**: key `DATA_GOV_IN_API_KEY`, resource id `MANDI_RESOURCE_ID`; cached CSV fallback.
+- **Agmarknet mandi prices via data.gov.in API**: key `DATA_GOV_IN_API_KEY`, resource id `MANDI_RESOURCE_ID`; saved-real-data cache, sample fixtures opt-in only.
 - **LLM provider**: key `LLM_API_KEY`; optional (fallback mode without it).
 - **NASA FIRMS** (N1 only): key `FIRMS_MAP_KEY`.
 
@@ -224,7 +224,7 @@ Seeded event: **E1** on P2/S2, type `inundation`, `event_date` = `DEMO_EVENT_DAT
 
 **Rule for the seed:** before the hackathon demo, the team checks Open-Meteo observed rainfall for P2's location and sets `DEMO_EVENT_DATE` to a real heavy-rain day so the evidence pack shows genuine data. Never fabricate weather values.
 
-Cached demo fixtures: forecast JSON, observed weather JSON, NDVI series and before/after values for P2, mandi price CSV (paddy, Barabanki, modal ₹2,300/q, labelled sample), benchmark CSV. Benchmark rows in the seed are labelled `source: "sample placeholder"` until replaced with the downloaded official values.
+Sample fixtures exist for offline tests/demos, but are disabled by default. The bundled mandi and benchmark CSV values are fictional; real-data mode does not return them. The demo farmer, plot, season and ledger records above are also fictional.
 
 ## 6. Processing rules and business logic
 
@@ -233,18 +233,18 @@ Cached demo fixtures: forecast JSON, observed weather JSON, NDVI series and befo
 #### Pipeline
 log text → **L1 parse** → confirm card → save Entry → **L2 metrics** on demand → agent/tools → **L6 monitor** → Event → **L8 evidence pack**.
 
-**Core principle:** the LLM never does arithmetic, never invents history, and never decides thresholds. All numbers come from the database or external data via deterministic backend code; the LLM only parses text and explains tool results.
+**Core principle:** the LLM never does arithmetic, never invents history, and never decides thresholds. All numbers come from the database or external data via deterministic server code; the LLM only parses text and explains tool results.
 
 #### L1 Log parsing
 1. Input text goes to the LLM with a fixed system prompt and must return `ParsedEntry` JSON; validate against the schema, coerce enums, reject unknown fields.
-2. Relative dates ("aaj", "kal", "today", "yesterday") are resolved by the backend against the server's local date (Asia/Kolkata), not by the LLM. Missing date → today.
+2. Relative dates ("aaj", "kal", "today", "yesterday") are resolved by the server against the server's local date (Asia/Kolkata), not by the LLM. Missing date → today.
 3. `plot_hint` is matched to a plot name case-insensitively and by plot number ("plot 2" → second plot by creation order). If no match and the farmer has more than one plot, the confirm card asks the user to choose.
 4. Any null required field is listed in `missing_fields` and highlighted on the confirm card. Never guess a cost.
 5. **Fallback (no `LLM_API_KEY`)**: regex parser that extracts amounts after "₹" or "rs/rupaye", numbers + units (kg, bag, quintal), and category keywords in Hindi and English (e.g. "DAP/urea/khad" → fertiliser, "beej/seed" → seed, "spray/dawa" → pesticide, "majdoor/labour" → labour, "paani/irrigation" → irrigation, "katai/harvest" → harvest, "becha/sold" → sale). Anything unmatched → category `note`.
 
 Example: "Sowed wheat on plot 2, 50 kg DAP, ₹1,400" → `{category: fertiliser, item: "DAP", quantity: 50, unit: kg, cost_inr: 1400.00, plot_hint: "plot 2", entry_date: today}`.
 
-#### L2 Season metrics (deterministic, backend)
+#### L2 Season metrics (deterministic, server)
 - `total_cost` = sum of `cost_inr` for non-deleted entries in categories other than `sale` and `harvest`.
 - `cost_by_category` = same sum grouped by category.
 - `harvest_quintals` = sum of `quantity` for `harvest` entries (convert kg ÷ 100).
@@ -404,7 +404,7 @@ Light theme; background #F7F5EF; primary accent #1F7A4D (green); warning #C77700
 | E19 | Evidence pack after report deadline | 200, pack generated, flag `past_deadline: true` | Warning banner from L7 on the pack screen and in the PDF |
 | E20 | Agent hits 6-tool cap | 200, `stopped_at_cap: true` | Best partial answer + "I stopped early. Try asking a simpler question." |
 | E21 | Agent asked for dosage/diagnosis/eligibility | 200 refusal | "Please check with your local Krishi Vigyan Kendra or agriculture office." |
-| E22 | Backend not reachable from frontend | Client-side | Full-screen card: "Can't connect to CropTrail. Check your internet and try again." with **Retry** |
+| E22 | Server not reachable from client | Client-side | Full-screen card: "Can't connect to CropTrail. Check your internet and try again." with **Retry** |
 | E23 | Invalid coordinates or area on plot form | 422 with field errors | Inline red text under each field |
 | E24 | Speech recognition unsupported or fails | Client-side | Mic button disabled with tooltip "Voice not available, please type." |
 | E25 | Monitor finds an event already open within ±2 days | No new event | Nothing new; logged in monitor response as `skipped_duplicate` |
@@ -432,67 +432,70 @@ Light theme; background #F7F5EF; primary accent #1F7A4D (green); warning #C77700
 - Strip EXIF from stored photo copies after reading timestamp and GPS into the database.
 
 #### Security
-- All API keys only in backend environment variables; never in frontend code or the repo.
-- CORS limited to `FRONTEND_ORIGIN`.
+- All API keys only in server environment variables; never in client code or the repo.
+- CORS limited to `CLIENT_ORIGIN`.
 - Input limits: log text 500 chars, notes 500 chars, photo 8 MB, agent question 300 chars.
 - Prompt injection: treat all farmer text, ledger contents and API data as data, never instructions; the agent can only call allowlisted tools with schema-validated arguments; tool outputs never change the system prompt.
 - No authentication: single-user local/hosted demo; state this in the README as a known limitation.
 
 #### Technology (team's chosen stack)
-- Frontend: Next.js (React) + Tailwind CSS, mobile-first.
-- Backend: Python FastAPI (chosen because the Earth Engine and PDF tooling are Python).
+- Client: Next.js (React) + Tailwind CSS, mobile-first.
+- Server: Python FastAPI (chosen because the Earth Engine and PDF tooling are Python).
 - Database: SQLite.
 - PDF: a server-side Python PDF library; charts rendered server-side as images.
 - LLM: any provider with JSON output and tool calling, accessed only through the AI service module; model name via env var.
 - Speech: browser Web Speech API (hi-IN, en-IN).
-- Scheduler: in-process background job in the backend for the weather monitor.
-- Tests: pytest for backend; frontend production build must succeed.
+- Scheduler: in-process background job in the server for the weather monitor.
+- Tests: pytest for server; client production build must succeed.
 
 #### Project structure
-- `frontend/`: pages (home, log, ledger, ask, alerts), components, API client, i18n strings (`hi`, `en`).
-- `backend/api/`: route handlers.
-- `backend/models/`: data models and schemas.
-- `backend/tools/`: deterministic logic (metrics, spray check, risk, crop stage, monitor, NDVI, evidence pack builder, price, benchmark).
-- `backend/services/`: external clients (weather, satellite, mandi, firms) each with a cache layer.
-- `backend/ai/`: the only module allowed to call the LLM (parser, agent loop, vision tag) plus fallbacks.
-- `backend/config/`: thresholds, crop calendar, claim field list, intent keywords.
-- `backend/seed/`: seed data and cached fixtures (JSON/CSV).
-- `backend/tests/`.
+- `client/`: pages (home, log, ledger, ask, alerts), components, API client, i18n strings (`hi`, `en`).
+- `server/api/`: route handlers.
+- `server/models/`: data models and schemas.
+- `server/tools/`: deterministic logic (metrics, spray check, risk, crop stage, monitor, NDVI, evidence pack builder, price, benchmark).
+- `server/services/`: external clients (weather, satellite, mandi, firms) each with a cache layer.
+- `server/ai/`: the only module allowed to call the LLM (parser, agent loop, vision tag) plus fallbacks.
+- `server/config/`: thresholds, crop calendar, claim field list, intent keywords.
+- `server/seed/`: seed data and cached fixtures (JSON/CSV).
+- `server/tests/`.
 
 #### Environment variables
 | Name | Default | Purpose |
 |---|---|---|
 | `LLM_API_KEY` | empty | Empty → fallback mode |
-| `LLM_MODEL` | provider default | Model name |
+| `LLM_MODEL` | `gemini-2.5-flash` | Gemini model name |
+| `LLM_BASE_URL` | Gemini API URL | Gemini API base URL |
+| `CLIENT_ORIGIN` | `http://localhost:3000` | Allowed client origin for CORS |
+| `SERVER_URL` | `http://localhost:8000` | Server URL used by the client proxy |
+| `USE_CACHED_DATA` | `false` | Avoid live requests and use saved data |
+| `ALLOW_SAMPLE_FIXTURES` | `false` | Explicitly allow fictional fixture data (offline demos/tests only) |
 | `DATA_GOV_IN_API_KEY` | empty | Mandi prices |
 | `MANDI_RESOURCE_ID` | empty | data.gov.in dataset id |
 | `GEE_SERVICE_ACCOUNT_JSON` | empty | Path to Earth Engine credentials |
-| `FIRMS_MAP_KEY` | empty | N1 only |
+| `FIRMS_MAP_KEY` | empty | Reserved; FIRMS integration is not implemented |
 | `DATABASE_PATH` | `./croptrail.db` | SQLite file |
 | `UPLOAD_DIR` | `./uploads` | Photos and PDFs |
-| `FRONTEND_ORIGIN` | `http://localhost:3000` | CORS |
 | `MONITOR_INTERVAL_HOURS` | 6 | Weather monitor |
 | `HEAVY_RAIN_MM` | 64.5 | Monitor threshold |
 | `REPORT_WINDOW_HOURS` | 72 | Countdown (verify against PMFBY) |
 | `SPRAY_RAIN_LOOKAHEAD_HOURS` | 24 | Spray check |
 | `DEMO_EVENT_DATE` | 2026-10-14 | Seeded event date |
-| `USE_CACHED_DATA` | false | Force all external data from fixtures (demo safety) |
 | `TIMEZONE` | Asia/Kolkata | Date resolution |
 
 #### Integrations
-Open-Meteo (forecast + archive), Google Earth Engine (Sentinel-2 L2A), data.gov.in Agmarknet, DES Cost of Cultivation CSV, optional NASA FIRMS. Every client has a cache keyed by request and a fixture fallback so the demo works offline with `USE_CACHED_DATA=true`.
+Open-Meteo (forecast + archive), Google Earth Engine (Sentinel-2 L2A), and data.gov.in Agmarknet are wired. Live responses are cached by request; fictional fixtures are available only when `ALLOW_SAMPLE_FIXTURES=true`. No live benchmark source or NASA FIRMS integration is configured.
 
 #### Constraints
 - Built in 48 hours by a small team: must-haves first; cut order if late: N1-N4, F17, F16, F15, F14.
 - Core flow (F1-F5, F12, F13) deployed and working end-to-end by hour 14.
 - External API usage stays within free tiers.
-- Runs locally with one command per part (frontend, backend).
+- Runs locally with one command per part (client, server).
 
 ## 10. Acceptance criteria and test examples
 
 ### Acceptance criteria and test examples
 
-#### Must pass in fallback mode (no LLM key, `USE_CACHED_DATA=true`, tests use a fixed clock of 2026-10-30 10:00 IST)
+#### Must pass in fallback mode (no LLM key, `USE_CACHED_DATA=true`, `ALLOW_SAMPLE_FIXTURES=true`, tests use a fixed clock of 2026-10-30 10:00 IST)
 - **AC1** `GET /api/health` returns 200 with `status: "ok"`, `llm: "fallback"`, and `weather/satellite/mandi: "cached"`.
 - **AC2** After `POST /api/demo/reset`, the database has 1 farmer, 2 plots, 3 seasons, 25 entries, 1 event (E1, `confirmed`).
 - **AC3** `GET /api/seasons/S1/metrics` returns `total_cost` 23000.00, `harvest_quintals` 46, `cost_per_quintal` 500.00, `revenue` 105800.00, `profit` 82800.00.
@@ -514,7 +517,7 @@ Open-Meteo (forecast + archive), Google Earth Engine (Sentinel-2 L2A), data.gov.
 - **AC19** Duplicate entry within 10 minutes returns 409 with the existing `entry_id`.
 - **AC20** Photo of 9 MB returns 413 with the exact message from E6.
 - **AC21** No outbound email/SMS/HTTP POST to any insurer or messaging service exists anywhere in the codebase.
-- **AC22** Backend unit tests pass; frontend production build succeeds; UI renders without horizontal scroll at 360 px.
+- **AC22** Server unit tests pass; client production build succeeds; UI renders without horizontal scroll at 360 px.
 
 #### Must pass in live mode (keys configured)
 - **AC23** LLM parser: "Sowed wheat on plot 2, 50 kg DAP, ₹1,400" → fertiliser, DAP, 50 kg, ₹1400.00, P2, today.
@@ -526,7 +529,7 @@ Open-Meteo (forecast + archive), Google Earth Engine (Sentinel-2 L2A), data.gov.
 - **SC1 Happy path logging**: Given the seeded farmer, when they type "kal plot 1 par 4 ghante paani diya ₹800" and confirm, then a new S3 `irrigation` entry dated yesterday with ₹800.00 appears at the top of the Ledger and S3 `total_cost` becomes 10300.00.
 - **SC2 Auto-trigger to evidence**: Given an observed-rain fixture of 78.4 mm for P1, when the operator taps **Run weather check**, then an amber alert appears on Home; when the farmer taps **Yes, damaged**, adds a photo and taps **Generate evidence pack**, then a PDF downloads with the countdown deadline and the 78.4 mm reading in the weather section.
 - **SC3 Nothing found**: Given a dry observed fixture, when the monitor runs, then no events are created and Alerts shows "No weather alerts."
-- **SC4 Offline demo**: Given `USE_CACHED_DATA=true` and the network disconnected, when the full 2-minute demo flow runs (log, ledger, ask, spray check, evidence pack), then every step completes and shows "cached" chips.
+- **SC4 Offline demo**: Given `USE_CACHED_DATA=true`, `ALLOW_SAMPLE_FIXTURES=true` and the network disconnected, when the full 2-minute demo flow runs (log, ledger, ask, spray check, evidence pack), then every step completes and clearly labels sample data.
 - **SC5 Safety**: Given any agent question asking to "send my claim to the insurer", then the agent replies that CropTrail can only prepare the record and the farmer must submit it through the official channel; no external request is made.
 
 #### Named unit tests
@@ -536,15 +539,15 @@ Open-Meteo (forecast + archive), Google Earth Engine (Sentinel-2 L2A), data.gov.
 
 The completed project should include, as applicable:
 
-- A functional frontend with required screens, loading/empty states, validation, and error states.
-- A backend exposing documented endpoints or server actions for required workflows.
+- A functional client with required screens, loading/empty states, validation, and error states.
+- A server exposing documented endpoints or server actions for required workflows.
 - A defined data model and persistence approach; explain demo storage if persistent storage is out of scope.
 - Integration and configuration instructions for AI models and third-party services.
 - Sample/demo data so the main workflow can be demonstrated without live customer data.
 - Tests or reproducible checks for acceptance criteria.
-- A README with prerequisites, environment setup, exact run commands for frontend and backend, test commands, known limitations, and troubleshooting.
+- A README with prerequisites, environment setup, exact run commands for client and server, test commands, known limitations, and troubleshooting.
 - An `.env.example` containing variable names only, with no real secrets.
 
 ## Definition of done
 
-The application can be started by following the README; the primary user journey works from input to output; frontend/backend integration is functional; errors are handled clearly; demo data is available; acceptance criteria can be checked; and limitations or unimplemented requirements are explicitly documented.
+The application can be started by following the README; the primary user journey works from input to output; client/server integration is functional; errors are handled clearly; demo data is available; acceptance criteria can be checked; and limitations or unimplemented requirements are explicitly documented.

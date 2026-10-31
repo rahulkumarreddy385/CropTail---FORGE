@@ -39,12 +39,15 @@ def _plot_or_404(conn, plot_id):
 # ---------------- health / farmer / demo ----------------
 @router.get("/health")
 def health():
-    cached = settings.use_cached_data
+    sample_mode = settings.use_cached_data and settings.allow_sample_fixtures
     return {"status": "ok", "llm": "live" if llm.enabled() else "fallback",
-            "weather": "cached" if cached else LAST_MODE.get("weather", "live"),
-            "satellite": "cached" if cached or not settings.gee_service_account_json else LAST_MODE.get("satellite", "live"),
-            "mandi": "cached" if cached or not (settings.data_gov_in_api_key and settings.mandi_resource_id)
-            else LAST_MODE.get("mandi", "live"),
+            "weather": "cached" if sample_mode else
+            ("unavailable" if settings.use_cached_data else LAST_MODE.get("weather", "live")),
+            "satellite": "cached" if sample_mode else
+            ("unavailable" if not settings.gee_service_account_json else LAST_MODE.get("satellite", "live")),
+            "mandi": "cached" if sample_mode else
+            ("unavailable" if not (settings.data_gov_in_api_key and settings.mandi_resource_id)
+             else LAST_MODE.get("mandi", "live")),
             "simulation_allowed": settings.allow_simulation, "today": settings.today().isoformat()}
 
 

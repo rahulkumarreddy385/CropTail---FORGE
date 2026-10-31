@@ -1,4 +1,4 @@
-"""Sentinel-2 L2A NDVI via Google Earth Engine, with fixture fallback for seeded plots.
+"""Sentinel-2 L2A NDVI via Google Earth Engine, with optional fixture fallback for seeded plots.
 
 Returns per-image {date, ndvi (median over the plot AOI), masked_pct} lists; choosing images and
 computing change is deterministic logic in tools/ndvi.py.
@@ -68,8 +68,8 @@ def _gee_images(lat: float, lon: float, area_acres: float, start: date, end: dat
 
 def get_images(plot: dict, start: date, end: date) -> dict | None:
     """None means no satellite data at all for this plot (spec E14)."""
+    key = f"{plot['lat']:.4f},{plot['lon']:.4f},{plot['area_acres']}:{start}:{end}"
     if not settings.use_cached_data and settings.gee_service_account_json:
-        key = f"{plot['lat']:.4f},{plot['lon']:.4f},{plot['area_acres']}:{start}:{end}"
         try:
             imgs = _gee_images(plot["lat"], plot["lon"], plot["area_acres"], start, end)
             cache_put("ndvi", key, imgs)
@@ -81,6 +81,15 @@ def get_images(plot: dict, start: date, end: date) -> dict | None:
                 LAST_MODE["satellite"] = "cached"
                 return {"images": cached["payload"], "mode": "cached", "fixture_kind": "captured",
                         "source": "Sentinel-2 L2A (cached)"}
+    else:
+        cached = cache_get("ndvi", key)
+        if cached:
+            LAST_MODE["satellite"] = "cached"
+            return {"images": cached["payload"], "mode": "cached", "fixture_kind": "captured",
+                    "source": "Sentinel-2 L2A (cached)"}
+    if not settings.allow_sample_fixtures:
+        LAST_MODE["satellite"] = "unavailable"
+        return None
     fx = fixture("ndvi.json")
     series = fx["plots"].get(plot["plot_id"])
     if series is None:

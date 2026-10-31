@@ -5,12 +5,12 @@ A farm memory with a brain. Farmers log their season in seconds (text, voice, ph
 Built from `specs.md` for the Climate, Resource Infrastructure & Global Supply Resilience track.
 
 ```
-frontend/   Next.js 14 + Tailwind, mobile-first (Home, Log, Ledger, Ask, Alerts, Plots)
-backend/    FastAPI + SQLite
+client/     Next.js 14 + Tailwind, mobile-first (Home, Log, Ledger, Ask, Alerts, Plots)
+server/     FastAPI + SQLite
   api/        route handlers
   models/     SQLite schema and helpers
   tools/      deterministic logic: metrics, spray check, risk, monitor, NDVI, evidence pack
-  services/   Open-Meteo, Earth Engine, data.gov.in clients, each with cache + fixture fallback
+  services/   Open-Meteo, Earth Engine, data.gov.in clients, with saved-real-data cache
   ai/         the ONLY module that calls the LLM (parser, agent, vision) + deterministic fallbacks
   config/     thresholds, crop calendar, keyword maps, claim fields
   seed/       demo seed, fixtures, fixture capture script
@@ -22,53 +22,57 @@ backend/    FastAPI + SQLite
 Prerequisites: Python 3.11+, Node 18+.
 
 ```bash
-# 1. Backend
-cd backend
+# 1. Server (terminal 1)
+cd server
 pip install -r requirements.txt
-cp .env.example .env            # edit keys if you have them; all optional
+# Create server/.env with any optional integration keys you have, such as:
+# LLM_API_KEY=your-gemini-api-key
+# LLM_MODEL=gemini-2.5-flash
+# CLIENT_ORIGIN=http://localhost:3000
 uvicorn main:app --reload --port 8000
+```
 
-# 2. Frontend
-cd frontend
+```bash
+# 2. Client (terminal 2, from the project root)
+cd client
 npm install
 npm run dev                     # http://localhost:3000
 ```
 
-The frontend proxies `/api/*` to `BACKEND_URL` (default `http://localhost:8000`), so you can open the app from a phone on the same Wi-Fi at `http://<laptop-ip>:3000`. Voice input needs Chrome and a secure context (localhost, or HTTPS when deployed).
+The client proxies `/api/*` to `SERVER_URL` (default `http://localhost:8000`), so you can open the app from a phone on the same Wi-Fi at `http://<laptop-ip>:3000`. Voice input needs Chrome and a secure context (localhost, or HTTPS when deployed).
 
 The database seeds itself on first start. Reset any time from **Plots & seasons > Reset to demo data** or `POST /api/demo/reset`.
 
 ## Tests
 
 ```bash
-cd backend && python -m pytest -q        # 37 tests covering AC1-AC22 and the named unit tests
-cd frontend && npm run build             # production build must succeed
+cd server && python -m pytest -q         # server tests
+cd client && npm run build               # production build must succeed
 ```
 
-Tests run in fallback mode with `USE_CACHED_DATA=true` and a fixed clock of 2026-10-30 10:00 IST.
+Tests run with explicit sample fixtures enabled, cached-data mode, and a fixed clock of 2026-10-30 10:00 IST.
 
 ## Modes: what works without keys
 
 | Integration | Without key / offline | With key |
 |---|---|---|
-| LLM (`LLM_API_KEY`) | Regex log parser + keyword agent covering 6 question types. "Demo mode" pill in header | Anthropic Messages API: JSON log parsing, tool-calling agent (max 6 tool calls), photo hints |
-| Weather (Open-Meteo, no key) | `USE_CACHED_DATA=true` uses fixtures; on outage, last saved response < 24 h, else a clear error | Live forecast, observed history, 1991-2020 normals |
-| Satellite (`GEE_SERVICE_ACCOUNT_JSON`) | Fixture NDVI for seeded plots P1/P2; other plots show "not available" | Live Sentinel-2 L2A NDVI with cloud masking (`pip install earthengine-api`) |
-| Mandi (`DATA_GOV_IN_API_KEY` + `MANDI_RESOURCE_ID`) | `seed/fixtures/mandi.csv` (sample placeholder) | Agmarknet via data.gov.in |
+| LLM (`LLM_API_KEY`) | Regex log parser + keyword agent covering 6 question types. "Demo mode" pill in header | Gemini API (`gemini-2.5-flash` by default): JSON log parsing, function-calling agent (max 6 tool calls), photo hints |
+| Weather (Open-Meteo, no key) | Last saved real response, otherwise clearly unavailable | Live forecast, observed history, 1991-2020 normals |
+| Satellite (`GEE_SERVICE_ACCOUNT_JSON`) | Last saved real response, otherwise "not available" | Live Sentinel-2 L2A NDVI with cloud masking |
+| Mandi (`DATA_GOV_IN_API_KEY` + `MANDI_RESOURCE_ID`) | Last saved real price, otherwise unavailable | Agmarknet via data.gov.in |
 
-Every number shown carries its source and a `live` / `cached` mode; synthetic fixtures are labelled "sample data" in the UI and in red in the PDF.
+Weather, satellite and mandi data use live sources or previously saved real responses. Sample fixtures are disabled by default (`ALLOW_SAMPLE_FIXTURES=false`). The demo farmer, plot and ledger records are still fictional.
 
 ## Before the demo (important)
 
-1. **Replace synthetic fixtures with real data.** The shipped weather/NDVI fixtures are synthetic so the app runs offline. With internet:
+1. **Use real external data.** Open-Meteo is live without a key. Configure a valid Earth Engine service-account file and set `MANDI_RESOURCE_ID` to enable Sentinel-2 and Agmarknet. The configured data.gov.in key alone is not enough to query mandi prices.
+2. **Optional offline demo only:** with `ALLOW_SAMPLE_FIXTURES=true` and `USE_CACHED_DATA=true`, sample fixtures can be used explicitly. To capture weather for that offline demo:
    ```bash
-   cd backend && python -m seed.capture_fixtures
+   cd server
+   python -m seed.capture_fixtures
    ```
-   This captures real Open-Meteo data for the seeded plot and prints the heaviest rain days.
-2. **Set `DEMO_EVENT_DATE`** in `.env` to one of those real heavy-rain days, then reset the demo data. Never fabricate weather values.
-3. **Replace the benchmark placeholder** in `seed/fixtures/benchmarks.csv` with the DES Cost of Cultivation values from data.gov.in.
+3. **Benchmarks:** the bundled cost-of-cultivation CSV is sample data and is not shown in real-data mode; no live benchmark API is configured.
 4. **Verify claim rules** (72-hour window, required fields in `config/rules.py: CLAIM_FIELDS`) against the official PMFBY guidelines.
-5. **Rehearse offline:** `USE_CACHED_DATA=true` makes every step work without a network.
 
 ### Showing the auto-trigger live
 
@@ -93,14 +97,14 @@ Real heavy rain rarely arrives on cue. With `ALLOW_SIMULATION=true`, **Alerts > 
 
 - No authentication: single-farmer demo. Anyone who can reach the server can read and change data.
 - HEIC photos are stored but their EXIF time/GPS is not read (plot pin is used).
-- Hindi UI strings cover the main flows; some backend-generated text (spray reasons, PDF) is English.
+- Hindi UI strings cover the main flows; some server-generated text (spray reasons, PDF) is English.
 - Weather evidence is gridded model data (several km), not plot-level measurement; hail is rarely visible in it.
-- NASA FIRMS fire alerts (N1), WhatsApp card (N2), a second regional language (N3) and offline sync (N4) are not built.
-- The LLM path targets the Anthropic Messages API; switching provider means editing `backend/ai/llm.py` only.
+- NASA FIRMS fire alerts (N1, intentionally skipped for now), WhatsApp card (N2), a second regional language (N3) and offline sync (N4) are not built.
+- The LLM integration uses the Gemini `generateContent` API through `server/ai/llm.py`.
 
 ## Troubleshooting
 
-- **"Can't connect to CropTrail"** in the app: the backend isn't running on `BACKEND_URL`.
-- **Weather unavailable (503):** no network and no cached forecast. Set `USE_CACHED_DATA=true`.
+- **"Can't connect to CropTrail"** in the app: the server isn't running at `SERVER_URL`.
+- **Weather unavailable (503):** no network and no saved real forecast. Reconnect to fetch live data.
 - **Voice button disabled:** the browser has no Web Speech API (use Chrome) or the page isn't on localhost/HTTPS.
 - **Pinned clock for rehearsals:** set `CROPTRAIL_NOW=2026-10-30T10:00:00+05:30` in `.env`.

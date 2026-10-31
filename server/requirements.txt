@@ -8,5 +8,4 @@ matplotlib>=3.8
 pillow>=10.4
 pytest>=8.0
 pypdf>=4.0
-# Optional: live Sentinel-2 NDVI (needs a GEE service account)
-# earthengine-api>=1.1
+earthengine-api>=1.1

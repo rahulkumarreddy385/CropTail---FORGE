@@ -1,15 +1,15 @@
-"""Runtime settings, read from environment variables (see .env.example)."""
+"""Runtime settings, read from environment variables (see server/.env)."""
 import os
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-BACKEND_DIR = Path(__file__).resolve().parent.parent
+SERVER_DIR = Path(__file__).resolve().parent.parent
 
 
 def _load_dotenv() -> None:
     """Minimal .env loader so the app runs with one command. Real env vars win."""
-    env_file = BACKEND_DIR / ".env"
+    env_file = SERVER_DIR / ".env"
     if not env_file.exists():
         return
     for line in env_file.read_text(encoding="utf-8").splitlines():
@@ -41,11 +41,11 @@ class Settings:
 
     @property
     def llm_model(self) -> str:
-        return _env("LLM_MODEL", "claude-sonnet-5-5")
+        return _env("LLM_MODEL", "gemini-2.5-flash")
 
     @property
     def llm_base_url(self) -> str:
-        return _env("LLM_BASE_URL", "https://api.anthropic.com")
+        return _env("LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta")
 
     @property
     def data_gov_in_api_key(self) -> str:
@@ -62,24 +62,24 @@ class Settings:
     @property
     def database_path(self) -> Path:
         p = Path(_env("DATABASE_PATH", "./croptrail.db"))
-        return p if p.is_absolute() else BACKEND_DIR / p
+        return p if p.is_absolute() else SERVER_DIR / p
 
     @property
     def upload_dir(self) -> Path:
         p = Path(_env("UPLOAD_DIR", "./uploads"))
-        p = p if p.is_absolute() else BACKEND_DIR / p
+        p = p if p.is_absolute() else SERVER_DIR / p
         p.mkdir(parents=True, exist_ok=True)
         return p
 
     @property
     def cache_dir(self) -> Path:
-        p = BACKEND_DIR / ".cache"
+        p = SERVER_DIR / ".cache"
         p.mkdir(parents=True, exist_ok=True)
         return p
 
     @property
-    def frontend_origin(self) -> str:
-        return _env("FRONTEND_ORIGIN", "http://localhost:3000")
+    def client_origin(self) -> str:
+        return _env("CLIENT_ORIGIN", "http://localhost:3000")
 
     @property
     def monitor_interval_hours(self) -> float:
@@ -104,6 +104,10 @@ class Settings:
     @property
     def use_cached_data(self) -> bool:
         return _bool("USE_CACHED_DATA", False)
+
+    @property
+    def allow_sample_fixtures(self) -> bool:
+        return _bool("ALLOW_SAMPLE_FIXTURES", False)
 
     @property
     def allow_simulation(self) -> bool:

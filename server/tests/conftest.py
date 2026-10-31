@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-BACKEND = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(BACKEND))
+SERVER_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(SERVER_ROOT))
 
 
 @pytest.fixture(autouse=True)
@@ -13,6 +13,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "test.db"))
     monkeypatch.setenv("UPLOAD_DIR", str(tmp_path / "uploads"))
     monkeypatch.setenv("USE_CACHED_DATA", "true")
+    monkeypatch.setenv("ALLOW_SAMPLE_FIXTURES", "true")
     monkeypatch.setenv("CROPTRAIL_NOW", "2026-10-30T10:00:00+05:30")
     monkeypatch.setenv("DISABLE_SCHEDULER", "true")
     monkeypatch.setenv("ALLOW_SIMULATION", "true")

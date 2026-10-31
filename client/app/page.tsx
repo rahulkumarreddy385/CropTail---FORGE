@@ -138,7 +138,7 @@ export default function HomePage() {
       })}
 
       {health?.weather === "cached" && (
-        <Note tone="grey">{lang === "hi" ? "ऑफ़लाइन डेमो: मौसम और सैटेलाइट डेटा सहेजे गए नमूने से है।" : "Offline demo: weather and satellite data come from saved sample fixtures."}</Note>
+        <Note tone="grey">{lang === "hi" ? "पहले से सहेजा गया वास्तविक डेटा दिखाया जा रहा है।" : "Showing previously saved real data where available."}</Note>
       )}
 
       <Link href="/log" aria-label={t("log")}

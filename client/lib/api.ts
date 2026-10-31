@@ -35,7 +35,7 @@ export async function api<T = any>(path: string, init?: RequestInit & { json?: a
     throw new ApiError(0, NETWORK_ERROR);
   }
   if (res.status >= 502 && res.status <= 504 && !(res.headers.get("content-type") || "").includes("json")) {
-    setDown(true); // proxy could not reach the backend
+    setDown(true); // proxy could not reach the server
     throw new ApiError(0, NETWORK_ERROR);
   }
   setDown(false);

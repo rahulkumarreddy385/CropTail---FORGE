@@ -1,4 +1,4 @@
-"""Agmarknet mandi prices via data.gov.in, cached CSV fallback. Also loads cost-of-cultivation benchmarks."""
+"""Agmarknet mandi prices via data.gov.in, saved-real-data cache, and optional sample fixtures."""
 import csv
 from datetime import datetime
 
@@ -22,10 +22,10 @@ def _fixture_price(crop: str, market: str) -> dict | None:
 
 def get_price(crop: str, market: str) -> dict | None:
     """Latest modal price (₹/quintal) for crop at market, or None when nothing is known."""
+    key = f"{crop}:{market}"
     live_ok = settings.data_gov_in_api_key and settings.mandi_resource_id and not settings.use_cached_data
     commodity = MANDI_COMMODITY.get(crop)
     if live_ok and commodity:
-        key = f"{crop}:{market}"
         try:
             raw = get_json(API.format(rid=settings.mandi_resource_id),
                            {"api-key": settings.data_gov_in_api_key, "format": "json", "limit": 100,
@@ -42,15 +42,20 @@ def get_price(crop: str, market: str) -> dict | None:
                 return out
         except Exception:
             pass
-        cached = cache_get("mandi", key)
-        if cached:
-            LAST_MODE["mandi"] = "cached"
-            return {**cached["payload"], "mode": "cached"}
-    LAST_MODE["mandi"] = "cached"
-    return _fixture_price(crop, market)
+    cached = cache_get("mandi", key)
+    if cached:
+        LAST_MODE["mandi"] = "cached"
+        return {**cached["payload"], "mode": "cached"}
+    if settings.allow_sample_fixtures:
+        LAST_MODE["mandi"] = "cached"
+        return _fixture_price(crop, market)
+    LAST_MODE["mandi"] = "unavailable"
+    return None
 
 
 def get_benchmark(crop: str, state: str) -> dict | None:
+    if not settings.allow_sample_fixtures:
+        return None
     with open(FIXTURES / "benchmarks.csv") as f:
         rows = [r for r in csv.DictReader(f)
                 if r["crop"] == crop and r["state"].lower() == (state or "").lower()]

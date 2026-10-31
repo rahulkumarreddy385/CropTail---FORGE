@@ -27,7 +27,7 @@ async def lifespan(_app):
 
 
 app = FastAPI(title="CropTrail API", version="0.1.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=[o.strip() for o in settings.frontend_origin.split(",")],
+app.add_middleware(CORSMiddleware, allow_origins=[o.strip() for o in settings.client_origin.split(",")],
                    allow_methods=["*"], allow_headers=["*"])
 app.include_router(router)
 
@@ -51,5 +51,4 @@ def _monitor_loop():
             log.info("weather monitor: %d plots, %d new events", out["checked_plots"], len(out["new_events"]))
         except Exception:  # never crash the server over a background check
             log.exception("weather monitor failed")
-
 

@@ -37,7 +37,7 @@ export function num(v: number | null | undefined): string {
   return Number.isInteger(v) ? String(v) : String(Math.round(v * 100) / 100);
 }
 
-// Hindi rendering of backend-generated weather text (backend keeps one canonical English string).
+// Hindi rendering of server-generated weather text (server keeps one canonical English string).
 export function alertText(e: { alert_message: string | null; trigger_detail: string; plot_name: string; event_date: string }, lang: "hi" | "en"): string {
   const en = e.alert_message || e.trigger_detail;
   if (lang === "en") return en;
