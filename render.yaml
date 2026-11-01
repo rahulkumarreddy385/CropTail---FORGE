@@ -22,10 +22,7 @@ services:
       - key: DISABLE_SCHEDULER
         value: true
       - key: CLIENT_ORIGIN
-        fromService:
-          type: web
-          name: croptrail-client
-          property: host
+        value: https://croptrail-client.onrender.com
       - key: APP_PASSWORD
         sync: false
       - key: SESSION_SECRET
@@ -48,7 +45,4 @@ services:
       - key: NODE_VERSION
         value: 22.16.0
       - key: SERVER_URL
-        fromService:
-          type: web
-          name: croptrail-server
-          property: host
+        value: https://croptrail-server.onrender.com
