@@ -1,16 +1,19 @@
 """HTTP API (spec section 4). Handlers stay thin: validation + calls into tools/ and ai/."""
 import io
 import mimetypes
+import time
+from threading import Lock
 from datetime import date, datetime, timedelta
 from typing import Literal
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse
 from PIL import ExifTags, Image, ImageOps
 from pydantic import BaseModel, Field
 
 from ai import agent, llm, parser, vision
 from config import rules
+from config import auth as auth_sessions
 from config.settings import settings
 from models import db
 from seed import seed
@@ -20,6 +23,10 @@ from tools import evidence_pack, insights, ledger
 from tools import events as ev_tools
 
 router = APIRouter(prefix="/api")
+LOGIN_FAILURES: dict[str, tuple[int, float]] = {}
+LOGIN_WINDOW_SECONDS = 15 * 60
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_LOCK = Lock()
 
 
 def err(status: int, message: str, **extra):
@@ -55,9 +62,58 @@ def health():
          else LAST_MODE.get("mandi", "configured")),
         "sample_data_enabled": sample_mode,
         "demo_seed_loaded": demo_seed_loaded,
+        "auth_required": settings.auth_enabled,
         "simulation_allowed": settings.allow_simulation,
         "today": settings.today().isoformat(),
     }
+
+
+class LoginIn(BaseModel):
+    password: str = Field(min_length=1, max_length=256)
+
+
+@router.get("/auth/session")
+def auth_session(request: Request):
+    authenticated = auth_sessions.valid_session(request.cookies.get("croptrail_session"))
+    return {"auth_required": settings.auth_enabled, "authenticated": authenticated}
+
+
+@router.post("/auth/login")
+def auth_login(body: LoginIn, request: Request):
+    if not settings.auth_enabled:
+        return {"ok": True, "auth_required": False}
+    now = time.monotonic()
+    client = request.client.host if request.client else "unknown"
+    with LOGIN_LOCK:
+        for key, (_, started_at) in list(LOGIN_FAILURES.items()):
+            if now - started_at >= LOGIN_WINDOW_SECONDS:
+                LOGIN_FAILURES.pop(key, None)
+        attempts, started = LOGIN_FAILURES.get(client, (0, now))
+        if attempts >= LOGIN_MAX_ATTEMPTS:
+            err(429, "Too many sign-in attempts. Please wait 15 minutes and try again.")
+        if not auth_sessions.valid_password(body.password):
+            LOGIN_FAILURES[client] = (attempts + 1, started)
+            err(401, "Incorrect password.")
+        LOGIN_FAILURES.pop(client, None)
+    response = JSONResponse({"ok": True, "auth_required": True})
+    response.set_cookie(
+        "croptrail_session",
+        auth_sessions.create_session(),
+        max_age=auth_sessions.SESSION_TTL_SECONDS,
+        httponly=True,
+        secure=settings.app_environment == "production",
+        samesite="strict",
+        path="/",
+    )
+    return response
+
+
+@router.post("/auth/logout")
+def auth_logout():
+    response = JSONResponse({"ok": True})
+    response.delete_cookie("croptrail_session", httponly=True, secure=settings.app_environment == "production",
+                           samesite="strict", path="/")
+    return response
 
 
 @router.get("/farmer")

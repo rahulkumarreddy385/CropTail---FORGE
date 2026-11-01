@@ -47,6 +47,18 @@ The client proxies `/api/*` to `SERVER_URL` (default `http://localhost:8000`), s
 
 The database seeds itself on first start. **Reset to demo data replaces the database contents**, so back up `server/croptrail.db` first if it contains records you need. The same destructive reset is available at `POST /api/demo/reset`.
 
+## Free hosted demo (Render)
+
+The repository includes a Render Blueprint in `render.yaml` for the client and server using Render's free web services. Free services can sleep when idle and have an ephemeral filesystem: SQLite records and uploaded photos can be lost when a service restarts or redeploys. The demo seed is restored when the server starts with an empty database. Do not enter real or sensitive farm records in this free deployment.
+
+1. Push this repository to GitHub without API keys or the `server/secrets/` directory. `server/.env` and `server/secrets/` are ignored by Git; do not put secrets in the tracked `client/.env` file.
+2. In Render, create a Blueprint from this repository and confirm both services use the free plan.
+3. Set the prompted `APP_PASSWORD` to a unique password with at least 16 characters. Render generates `SESSION_SECRET`; keep it private.
+4. Add `GEMINI_API_KEY`, `DATA_GOV_IN_API_KEY` and `MANDI_RESOURCE_ID` in the Render dashboard if needed. Local `.env` values are not copied automatically. Earth Engine credentials must be uploaded as a Render secret file and `GEE_SERVICE_ACCOUNT_JSON` set to that file's path.
+5. After deploy, open the client URL and sign in. The demo dataset is automatically seeded on the first empty database. It is fictional; do not treat its alerts or evidence PDF as real.
+
+Hosted mode enforces password auth at the API, uses secure HTTP-only session cookies, and disables sample fixtures and the background monitor by default. This is a protected, disposable single-user demo, not production-grade multi-user farm software. Keep the password private and do not enter sensitive personal/farm records.
+
 ## Tests
 
 ```powershell

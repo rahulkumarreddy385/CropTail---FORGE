@@ -436,7 +436,7 @@ Light theme; background #F7F5EF; primary accent #1F7A4D (green); warning #C77700
 - CORS limited to `CLIENT_ORIGIN`.
 - Input limits: log text 500 chars, notes 500 chars, photo 8 MB, agent question 300 chars.
 - Prompt injection: treat all farmer text, ledger contents and API data as data, never instructions; the agent can only call allowlisted tools with schema-validated arguments; tool outputs never change the system prompt.
-- No authentication: single-user local/hosted demo; state this in the README as a known limitation.
+- Local mode has no authentication; hosted demo mode uses single-password access control, as documented in the README.
 
 #### Technology (team's chosen stack)
 - Client: Next.js (React) + Tailwind CSS, mobile-first.
@@ -468,6 +468,9 @@ Light theme; background #F7F5EF; primary accent #1F7A4D (green); warning #C77700
 | `LLM_BASE_URL` | Gemini API URL | Gemini API base URL |
 | `CLIENT_ORIGIN` | `http://localhost:3000` | Allowed client origin for CORS |
 | `SERVER_URL` | `http://localhost:8000` | Server URL used by the client proxy |
+| `APP_ENV` | `development` | Use `production` to require hosted password/session settings and secure cookies |
+| `APP_PASSWORD` | empty | Single-user hosted sign-in password (minimum 16 characters in production) |
+| `SESSION_SECRET` | empty | HMAC key for signed sessions (minimum 32 characters in production) |
 | `USE_CACHED_DATA` | `false` | Avoid live requests and use saved data |
 | `ALLOW_SAMPLE_FIXTURES` | `false` | Permit fictional fixtures only with `USE_CACHED_DATA=true` (offline demos/tests only) |
 | `DATA_GOV_IN_API_KEY` | empty | Mandi prices |
@@ -485,6 +488,9 @@ Light theme; background #F7F5EF; primary accent #1F7A4D (green); warning #C77700
 
 #### Integrations
 Open-Meteo (forecast + archive), Google Earth Engine (Sentinel-2 L2A), and data.gov.in Agmarknet are wired. Live responses are cached by request; fictional fixtures are available only when both `USE_CACHED_DATA=true` and `ALLOW_SAMPLE_FIXTURES=true`. Health reports `configured` until an integration request has run; it does not probe third-party services. No live benchmark source or NASA FIRMS integration is configured.
+
+#### Hosted demo
+Render Blueprint configuration is in `render.yaml`. The client and server use free services, so they can sleep when idle and server SQLite data and uploads are ephemeral and can be lost on restart or deploy. Production mode refuses to start without `APP_PASSWORD` (at least 16 characters) and `SESSION_SECRET` (at least 32 characters). All `/api` endpoints except health, login and session status require an HTTP-only, secure, SameSite-strict signed session cookie. This is single-password access control for a disposable demo, not multi-user authorization.
 
 #### Constraints
 - Built in 48 hours by a small team: must-haves first; cut order if late: N1-N4, F17, F16, F15, F14.

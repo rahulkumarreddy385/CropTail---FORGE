@@ -5,6 +5,7 @@ from datetime import date, timedelta
 
 from PIL import Image
 from pypdf import PdfReader
+import pytest
 
 from tests.conftest import hourly_fixture
 
@@ -20,6 +21,66 @@ def test_health_fallback(client):
     assert body["weather"] == body["satellite"] == body["mandi"] == "cached"
     assert body["sample_data_enabled"] is True
     assert body["demo_seed_loaded"] is True
+
+
+def test_hosted_password_login_protects_api(client, monkeypatch):
+    from api.routes import LOGIN_FAILURES
+
+    monkeypatch.setenv("APP_PASSWORD", "a-strong-demo-password")
+    monkeypatch.setenv("SESSION_SECRET", "session-secret-that-is-long-enough-for-tests")
+    monkeypatch.setenv("APP_ENV", "production")
+    LOGIN_FAILURES.clear()
+
+    assert client.get("/api/auth/session").json() == {"auth_required": True, "authenticated": False}
+    assert client.get("/api/plots").status_code == 401
+    assert client.post("/api/auth/login", json={"password": "wrong"}).status_code == 401
+
+    response = client.post("/api/auth/login", json={"password": "a-strong-demo-password"})
+    assert response.status_code == 200
+    cookie = response.headers["set-cookie"]
+    token = response.cookies["croptrail_session"]
+    cookie_header = {"cookie": f"croptrail_session={token}"}
+    assert "HttpOnly" in cookie and "Secure" in cookie and "SameSite=strict" in cookie
+    assert client.get("/api/auth/session", headers=cookie_header).json() == {
+        "auth_required": True, "authenticated": True,
+    }
+    assert client.get("/api/plots", headers=cookie_header).status_code == 200
+
+    assert client.post("/api/auth/logout", headers=cookie_header).status_code == 200
+    assert client.get("/api/auth/session").json()["authenticated"] is False
+    assert client.get("/api/plots").status_code == 401
+
+
+def test_production_requires_strong_auth_settings(monkeypatch):
+    from main import validate_production_config
+
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("APP_PASSWORD", "")
+    monkeypatch.setenv("SESSION_SECRET", "")
+    with pytest.raises(RuntimeError, match="APP_PASSWORD and SESSION_SECRET"):
+        validate_production_config()
+
+    monkeypatch.setenv("APP_PASSWORD", "short")
+    monkeypatch.setenv("SESSION_SECRET", "short")
+    with pytest.raises(RuntimeError, match="at least 16 characters"):
+        validate_production_config()
+
+    monkeypatch.setenv("APP_PASSWORD", "a-strong-demo-password")
+    monkeypatch.setenv("SESSION_SECRET", "session-secret-that-is-long-enough-for-tests")
+    validate_production_config()
+
+
+def test_hosted_login_rate_limits_failed_passwords(client, monkeypatch):
+    from api.routes import LOGIN_FAILURES
+
+    monkeypatch.setenv("APP_PASSWORD", "a-strong-demo-password")
+    monkeypatch.setenv("SESSION_SECRET", "session-secret-that-is-long-enough-for-tests")
+    LOGIN_FAILURES.clear()
+
+    for _ in range(5):
+        assert client.post("/api/auth/login", json={"password": "wrong"}).status_code == 401
+    response = client.post("/api/auth/login", json={"password": "a-strong-demo-password"})
+    assert response.status_code == 429
 
 
 def test_reset_counts(client):
@@ -343,7 +404,7 @@ def test_no_outbound_messaging_code():
     for f in root.rglob("*.py"):
         if "tests" in f.parts or ".venv" in f.parts:
             continue
-        assert not banned.search(f.read_text()), f
+        assert not banned.search(f.read_text(encoding="utf-8")), f
 
 
 def test_not_found(client):

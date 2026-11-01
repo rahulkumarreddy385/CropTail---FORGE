@@ -1,9 +1,9 @@
 "use client";
-import { Bell, BookOpen, Home, MessageCircle, PlusCircle, WifiOff } from "lucide-react";
+import { Bell, BookOpen, Home, LogOut, MessageCircle, PlusCircle, WifiOff } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { api, Health, onConnectivity } from "@/lib/api";
+import { api, AuthSession, Health, onConnectivity } from "@/lib/api";
 import { LangProvider, useLang } from "@/lib/i18n";
 import { Button } from "./ui";
 
@@ -14,6 +14,7 @@ export const useApp = () => useContext(Ctx);
 function Inner({ children }: { children: React.ReactNode }) {
   const { t, lang, setLang } = useLang();
   const path = usePathname();
+  const router = useRouter();
   const [health, setHealth] = useState<Health | null>(null);
   const [down, setDown] = useState(false);
   const [suspected, setSuspected] = useState(0);
@@ -31,6 +32,15 @@ function Inner({ children }: { children: React.ReactNode }) {
     load();
     return onConnectivity(setDown) as unknown as () => void;
   }, [load]);
+  useEffect(() => {
+    let active = true;
+    api<AuthSession>("/api/auth/session").then((session) => {
+      if (!active || !session.auth_required) return;
+      if (!session.authenticated && path !== "/login") router.replace("/login");
+      if (session.authenticated && path === "/login") router.replace("/");
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [path, router]);
   useEffect(() => {
     refreshBadges();
   }, [path, refreshBadges]);
@@ -74,6 +84,16 @@ function Inner({ children }: { children: React.ReactNode }) {
             <span className="rounded-full bg-red-100 text-danger text-[12px] font-semibold px-2.5 py-1">
               {lang === "hi" ? "AI अनुपलब्ध" : "AI unavailable"}
             </span>
+          )}
+          {health?.auth_required && path !== "/login" && (
+            <button onClick={() => {
+              api("/api/auth/logout", { method: "POST" })
+                .then(() => router.replace("/login"))
+                .catch((e: Error) => toast(e.message));
+            }} aria-label={lang === "hi" ? "लॉग आउट" : "Sign out"}
+              className="h-10 w-10 rounded-full border border-line bg-white grid place-items-center">
+              <LogOut size={18} />
+            </button>
           )}
           <button onClick={() => setLang(lang === "hi" ? "en" : "hi")}
             className="min-h-[40px] rounded-full border border-line bg-white px-3 text-[14px] font-semibold" aria-label="Switch language">

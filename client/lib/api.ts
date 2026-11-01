@@ -89,5 +89,6 @@ export type AskResult = {
 };
 export type Health = {
   status: string; llm: "live" | "configured" | "unavailable" | "fallback"; weather: string; satellite: string; mandi: string;
-  sample_data_enabled: boolean; demo_seed_loaded: boolean; simulation_allowed: boolean; today: string;
+  sample_data_enabled: boolean; demo_seed_loaded: boolean; auth_required: boolean; simulation_allowed: boolean; today: string;
 };
+export type AuthSession = { auth_required: boolean; authenticated: boolean };

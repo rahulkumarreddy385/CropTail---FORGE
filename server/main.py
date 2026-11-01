@@ -18,8 +18,18 @@ from tools import events
 log = logging.getLogger("croptrail")
 
 
+def validate_production_config() -> None:
+    if settings.app_environment != "production":
+        return
+    if not settings.auth_enabled:
+        raise RuntimeError("APP_PASSWORD and SESSION_SECRET must be set in production.")
+    if len(settings.app_password) < 16 or len(settings.session_secret) < 32:
+        raise RuntimeError("Production APP_PASSWORD must be at least 16 characters and SESSION_SECRET at least 32.")
+
+
 @asynccontextmanager
 async def lifespan(_app):
+    validate_production_config()
     seed.ensure_seeded()
     if not settings.disable_scheduler:
         threading.Thread(target=_monitor_loop, daemon=True, name="weather-monitor").start()
@@ -30,6 +40,18 @@ app = FastAPI(title="CropTrail API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=[o.strip() for o in settings.client_origin.split(",")],
                    allow_methods=["*"], allow_headers=["*"])
 app.include_router(router)
+
+
+@app.middleware("http")
+async def protect_api(request: Request, call_next):
+    path = request.url.path
+    public_paths = {"/api/health", "/api/auth/login", "/api/auth/session"}
+    if settings.auth_enabled and path.startswith("/api/") and path not in public_paths:
+        from config.auth import valid_session
+
+        if not valid_session(request.cookies.get("croptrail_session")):
+            return JSONResponse(status_code=401, content={"detail": {"message": "Please sign in to continue."}})
+    return await call_next(request)
 
 
 @app.exception_handler(RequestValidationError)
@@ -51,4 +73,3 @@ def _monitor_loop():
             log.info("weather monitor: %d plots, %d new events", out["checked_plots"], len(out["new_events"]))
         except Exception:  # never crash the server over a background check
             log.exception("weather monitor failed")
-

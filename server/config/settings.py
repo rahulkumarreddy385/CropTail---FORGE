@@ -87,6 +87,22 @@ class Settings:
         return _env("CLIENT_ORIGIN", "http://localhost:3000")
 
     @property
+    def app_environment(self) -> str:
+        return _env("APP_ENV", "development").lower()
+
+    @property
+    def app_password(self) -> str:
+        return _env("APP_PASSWORD")
+
+    @property
+    def session_secret(self) -> str:
+        return _env("SESSION_SECRET")
+
+    @property
+    def auth_enabled(self) -> bool:
+        return bool(self.app_password and self.session_secret)
+
+    @property
     def monitor_interval_hours(self) -> float:
         return float(_env("MONITOR_INTERVAL_HOURS", "6"))
 
