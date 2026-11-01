@@ -59,12 +59,12 @@ def get_forecast(lat: float, lon: float) -> dict:
     """7-day hourly + daily forecast for a point. Raises DataUnavailable (-> 503) per spec E12."""
     key = _key(lat, lon)
     if settings.use_cached_data:
-        cached = _cached_forecast(key)
-        if cached:
-            return cached
         if settings.allow_sample_fixtures:
             LAST_MODE["weather"] = "cached"
             return _forecast_fixture()
+        cached = _cached_forecast(key)
+        if cached:
+            return cached
         LAST_MODE["weather"] = "unavailable"
         raise DataUnavailable("No saved real weather forecast is available. Connect to the internet and try again.")
     try:
@@ -87,11 +87,6 @@ def get_observed(lat: float, lon: float, start: date, end: date) -> dict:
     """Observed daily weather (gridded model analysis) for [start, end]. Missing days come back as None."""
     key = f"{_key(lat, lon)}:{start}:{end}"
     if settings.use_cached_data:
-        cached = cache_get("observed", key)
-        if cached:
-            LAST_MODE["weather"] = "cached"
-            return {"days": _fill(cached["payload"], start, end), "mode": "cached", "fixture_kind": "captured",
-                    "fetched_at": cached["saved_at"], "source": "Open-Meteo (cached)"}
         if settings.allow_sample_fixtures:
             LAST_MODE["weather"] = "cached"
             fx = fixture("observed.json")
@@ -101,6 +96,11 @@ def get_observed(lat: float, lon: float, start: date, end: date) -> dict:
                     for i, t in enumerate(d["time"]) if start.isoformat() <= t <= end.isoformat()]
             return {"days": _fill(days, start, end), "mode": "cached", "fixture_kind": fx["_meta"]["kind"],
                     "fetched_at": settings.now().isoformat(), "source": "Open-Meteo (sample fixture)"}
+        cached = cache_get("observed", key)
+        if cached:
+            LAST_MODE["weather"] = "cached"
+            return {"days": _fill(cached["payload"], start, end), "mode": "cached", "fixture_kind": "captured",
+                    "fetched_at": cached["saved_at"], "source": "Open-Meteo (cached)"}
         LAST_MODE["weather"] = "unavailable"
         raise DataUnavailable("No saved real weather observations are available. Connect to the internet and try again.")
     recent = (settings.today() - start).days <= 90
@@ -138,13 +138,18 @@ def _fill(days: list[dict], start: date, end: date) -> list[dict]:
 
 def get_monthly_normal(lat: float, lon: float, month: int) -> dict:
     """Mean daily rainfall for a calendar month over 1991-2020."""
+    if settings.use_cached_data and settings.allow_sample_fixtures:
+        fx = fixture("normals.json")
+        LAST_MODE["weather"] = "cached"
+        return {"mean_daily_precip_mm": fx["mean_daily_precip_mm"][str(month)], "mode": "cached",
+                "fixture_kind": fx["_meta"]["kind"]}
     key = _key(lat, lon)
     cached = cache_get("normals", key)
     if cached:
         LAST_MODE["weather"] = "cached"
         return {"mean_daily_precip_mm": cached["payload"][str(month)], "mode": "cached", "fixture_kind": "captured"}
     if settings.use_cached_data:
-        if settings.allow_sample_fixtures:
+        if settings.sample_data_enabled:
             fx = fixture("normals.json")
             return {"mean_daily_precip_mm": fx["mean_daily_precip_mm"][str(month)], "mode": "cached",
                     "fixture_kind": fx["_meta"]["kind"]}
@@ -163,7 +168,7 @@ def get_monthly_normal(lat: float, lon: float, month: int) -> dict:
         LAST_MODE["weather"] = "live"
         return {"mean_daily_precip_mm": means[str(month)], "mode": "live", "fixture_kind": None}
     except Exception:
-        if settings.allow_sample_fixtures:
+        if settings.sample_data_enabled:
             fx = fixture("normals.json")
             return {"mean_daily_precip_mm": fx["mean_daily_precip_mm"][str(month)], "mode": "cached",
                     "fixture_kind": fx["_meta"]["kind"]}

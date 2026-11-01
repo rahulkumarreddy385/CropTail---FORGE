@@ -87,7 +87,7 @@ def get_images(plot: dict, start: date, end: date) -> dict | None:
             LAST_MODE["satellite"] = "cached"
             return {"images": cached["payload"], "mode": "cached", "fixture_kind": "captured",
                     "source": "Sentinel-2 L2A (cached)"}
-    if not settings.allow_sample_fixtures:
+    if not settings.sample_data_enabled:
         LAST_MODE["satellite"] = "unavailable"
         return None
     fx = fixture("ndvi.json")

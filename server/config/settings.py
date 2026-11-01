@@ -17,7 +17,12 @@ def _load_dotenv() -> None:
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
-        os.environ.setdefault(key.strip(), value.strip())
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        else:
+            value = value.split("#", 1)[0].rstrip()
+        os.environ.setdefault(key.strip(), value)
 
 
 _load_dotenv()
@@ -37,11 +42,11 @@ class Settings:
 
     @property
     def llm_api_key(self) -> str:
-        return _env("LLM_API_KEY")
+        return _env("GEMINI_API_KEY") or _env("LLM_API_KEY")
 
     @property
     def llm_model(self) -> str:
-        return _env("LLM_MODEL", "gemini-2.5-flash")
+        return _env("LLM_MODEL", "gemini-3.8-flash")
 
     @property
     def llm_base_url(self) -> str:
@@ -108,6 +113,10 @@ class Settings:
     @property
     def allow_sample_fixtures(self) -> bool:
         return _bool("ALLOW_SAMPLE_FIXTURES", False)
+
+    @property
+    def sample_data_enabled(self) -> bool:
+        return self.use_cached_data and self.allow_sample_fixtures
 
     @property
     def allow_simulation(self) -> bool:

@@ -65,6 +65,11 @@ function Inner({ children }: { children: React.ReactNode }) {
               {lang === "hi" ? "सीमित जवाब" : "Basic answers"}
             </span>
           )}
+          {health?.llm === "configured" && (
+            <span className="rounded-full bg-[#E4E1D8] text-muted text-[12px] font-semibold px-2.5 py-1">
+              {lang === "hi" ? "Gemini सेट है" : "Gemini configured"}
+            </span>
+          )}
           {health?.llm === "unavailable" && (
             <span className="rounded-full bg-red-100 text-danger text-[12px] font-semibold px-2.5 py-1">
               {lang === "hi" ? "AI अनुपलब्ध" : "AI unavailable"}

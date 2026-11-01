@@ -85,6 +85,7 @@ export default function AlertsPage() {
                   <p className="font-bold">{EVENT_LABEL[e.type]?.[lang]}</p>
                   <Chip tone={STATUS_TONE[e.status]}>{e.status}</Chip>
                 </div>
+                {e.is_demo && <Chip tone="amber" className="mt-1">{lang === "hi" ? "काल्पनिक डेमो" : "Fictional demo"}</Chip>}
                 <p className="text-[14px] text-muted">{e.plot_name} · {shortDate(e.event_date, lang)}</p>
                 <p className="text-[14px] mt-1">{e.trigger_detail}</p>
                 {e.status === "confirmed" && (

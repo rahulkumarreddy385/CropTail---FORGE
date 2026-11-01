@@ -39,16 +39,25 @@ def _plot_or_404(conn, plot_id):
 # ---------------- health / farmer / demo ----------------
 @router.get("/health")
 def health():
-    sample_mode = settings.use_cached_data and settings.allow_sample_fixtures
-    return {"status": "ok", "llm": llm.provider_status(),
-            "weather": "cached" if sample_mode else
-            ("unavailable" if settings.use_cached_data else LAST_MODE.get("weather", "live")),
-            "satellite": "cached" if sample_mode else
-            ("unavailable" if not settings.gee_service_account_json else LAST_MODE.get("satellite", "live")),
-            "mandi": "cached" if sample_mode else
-            ("unavailable" if not (settings.data_gov_in_api_key and settings.mandi_resource_id)
-             else LAST_MODE.get("mandi", "live")),
-            "simulation_allowed": settings.allow_simulation, "today": settings.today().isoformat()}
+    sample_mode = settings.sample_data_enabled
+    with db.db() as conn:
+        demo_seed_loaded = conn.execute(
+            "SELECT EXISTS(SELECT 1 FROM entry WHERE source = 'seed' AND deleted = 0)"
+        ).fetchone()[0] == 1
+    return {
+        "status": "ok",
+        "llm": llm.provider_status(),
+        "weather": "cached" if sample_mode else LAST_MODE.get("weather", "configured"),
+        "satellite": "cached" if sample_mode else
+        ("unavailable" if not settings.gee_service_account_json else LAST_MODE.get("satellite", "configured")),
+        "mandi": "cached" if sample_mode else
+        ("unavailable" if not (settings.data_gov_in_api_key and settings.mandi_resource_id)
+         else LAST_MODE.get("mandi", "configured")),
+        "sample_data_enabled": sample_mode,
+        "demo_seed_loaded": demo_seed_loaded,
+        "simulation_allowed": settings.allow_simulation,
+        "today": settings.today().isoformat(),
+    }
 
 
 @router.get("/farmer")
@@ -501,7 +510,8 @@ def _event_view(conn, e: dict) -> dict:
                    (e["event_id"],))
     packs = db.rows(conn, "SELECT pack_id, generated_at, past_deadline FROM evidence_pack WHERE event_id = ? "
                           "ORDER BY generated_at DESC", (e["event_id"],))
-    return {**e, "plot_name": plot["name"] if plot else None, "alert_message": alert["message"] if alert else None,
+    return {**e, "plot_name": plot["name"] if plot else None, "is_demo": e["trigger"] == "demo_seed",
+            "alert_message": alert["message"] if alert else None,
             **ev_tools.countdown(e),
             "packs": [{**p, "file_url": f"/api/evidence-packs/{p['pack_id']}/file"} for p in packs]}
 

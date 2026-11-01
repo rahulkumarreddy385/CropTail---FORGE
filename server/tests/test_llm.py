@@ -3,7 +3,7 @@ from ai import llm
 
 def test_gemini_request_and_function_response(monkeypatch):
     monkeypatch.setenv("LLM_API_KEY", "test-key")
-    monkeypatch.setenv("LLM_MODEL", "gemini-2.5-flash")
+    monkeypatch.setenv("LLM_MODEL", "gemini-3.8-flash")
     monkeypatch.setenv("LLM_BASE_URL", "https://generativelanguage.googleapis.com/v1beta")
     requests = []
     responses = [
@@ -52,9 +52,10 @@ def test_gemini_request_and_function_response(monkeypatch):
         "type": "tool_use", "id": "call-1", "name": "lookup", "input": {"count": 2},
     }]
     url, request = requests[0]
-    assert url.endswith("/models/gemini-2.5-flash:generateContent")
+    assert url.endswith("/models/gemini-3.8-flash:generateContent")
     assert request["headers"]["x-goog-api-key"] == "test-key"
     assert request["json"]["systemInstruction"]["parts"][0]["text"] == "Use tools."
+    assert request["json"]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "low"}
     assert request["json"]["contents"][0]["parts"][0]["inlineData"] == {
         "mimeType": "image/jpeg", "data": "aGVsbG8=",
     }
@@ -96,9 +97,61 @@ def test_gemini_auth_failure_is_actionable_without_exposing_response(monkeypatch
     try:
         llm.messages("System", [{"role": "user", "content": "Question"}])
     except llm.LLMUnavailable as exc:
-        assert "Check LLM_API_KEY and model access" in str(exc)
+        assert "Check GEMINI_API_KEY and model access" in str(exc)
         assert "test-key" not in str(exc)
     else:
         raise AssertionError("Expected Gemini authorization failure")
 
     assert llm.provider_status() == "unavailable"
+
+
+def test_gemini_503_retries_and_reports_temporary_outage(monkeypatch):
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+    attempts = {"count": 0}
+    delays = []
+
+    class Response:
+        status_code = 503
+        request = llm.httpx.Request("POST", "https://example.test")
+
+        def raise_for_status(self):
+            raise llm.httpx.HTTPStatusError(
+                "service unavailable", request=self.request, response=self,
+            )
+
+    def fake_post(*args, **kwargs):
+        attempts["count"] += 1
+        return Response()
+
+    monkeypatch.setattr(llm.httpx, "post", fake_post)
+    monkeypatch.setattr(llm.time, "sleep", delays.append)
+    monkeypatch.setattr(llm.random, "uniform", lambda *_: 0)
+
+    try:
+        llm.messages("System", [{"role": "user", "content": "Question"}])
+    except llm.LLMUnavailable as exc:
+        assert "temporarily unavailable (HTTP 503)" in str(exc)
+        assert "not an invalid-key error" in str(exc)
+    else:
+        raise AssertionError("Expected Gemini service-unavailable failure")
+
+    assert attempts["count"] == 3
+    assert delays == [1, 2]
+    assert llm.provider_status() == "unavailable"
+
+
+def test_gemini_api_key_setting_prefers_new_name(monkeypatch):
+    from config.settings import settings
+
+    monkeypatch.setenv("GEMINI_API_KEY", "new-key")
+    monkeypatch.setenv("LLM_API_KEY", "legacy-key")
+
+    assert settings.llm_api_key == "new-key"
+
+
+def test_gemini_model_default(monkeypatch):
+    from config.settings import settings
+
+    monkeypatch.delenv("LLM_MODEL", raising=False)
+
+    assert settings.llm_model == "gemini-3.8-flash"

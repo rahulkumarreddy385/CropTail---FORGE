@@ -1,4 +1,4 @@
-"""Demo seed (spec section 5). All people and places are fictional."""
+"""Demo seed (spec section 5). All people, places, prices and records are fictional."""
 from datetime import datetime, timedelta
 
 from PIL import Image, ImageDraw
@@ -46,12 +46,23 @@ ENTRIES = [
     ("S2", "2026-08-26", "pesticide", "insecticide spray", 1, "none", 1800, None),
     ("S2", "2026-10-22", "labour", "harvesting", 1, "none", 5000, None),
     ("S2", "2026-10-24", "harvest", "paddy", 40, "quintal", None, None),
+    ("S2", "2026-10-29", "sale", "paddy sold to local trader", 36, "quintal", 82800, 2300),
     ("S3", "2026-08-18", "seed", "tomato seedlings", 3000, "none", 2000, None),
     ("S3", "2026-08-19", "fertiliser", "FYM", 1, "none", 1500, None),
     ("S3", "2026-08-20", "labour", "transplanting", 5, "day", 2500, None),
     ("S3", "2026-09-05", "land_prep", "staking", 1, "none", 1800, None),
     ("S3", "2026-09-20", "pesticide", "fungicide spray", 1, "none", 900, None),
     ("S3", "2026-09-25", "irrigation", "pump", 4, "hour", 800, None),
+    ("S3", "2026-08-25", "labour", "bed mulching and tying", 2, "day", 1400, None),
+    ("S3", "2026-09-12", "fertiliser", "soil-test based top dressing", 1, "bag", 1400, None),
+    ("S3", "2026-09-28", "irrigation", "pump irrigation", 6, "hour", 1200, None),
+    ("S3", "2026-10-04", "labour", "pruning and trellis tying", 2, "day", 1000, None),
+    ("S3", "2026-10-10", "irrigation", "pump irrigation", 4, "hour", 800, None),
+    ("S3", "2026-10-17", "labour", "sorting and crate preparation", 2, "day", 1200, None),
+    ("S3", "2026-10-20", "harvest", "tomato first picking", 6, "quintal", None, None),
+    ("S3", "2026-10-23", "sale", "tomato sold at local mandi", 4, "quintal", 10400, 2600),
+    ("S3", "2026-10-28", "harvest", "tomato second picking", 5, "quintal", None, None),
+    ("S3", "2026-10-30", "sale", "tomato sold at local mandi", 4, "quintal", 10400, 2600),
 ]
 
 
@@ -92,11 +103,17 @@ def reset_db() -> dict:
         confirmed_at = datetime.combine(ev_date + timedelta(days=1), datetime.min.time(), settings.timezone).replace(hour=9)
         db.insert(conn, "event", {
             "event_id": "E1", "plot_id": "P2", "season_id": "S2", "type": "inundation",
-            "event_date": ev_date.isoformat(), "status": "confirmed", "trigger": "auto_weather",
-            "trigger_detail": f"Heavy-rain alert for Nahar wala khet on {ev_date.isoformat()} (observed values in the area weather section)",
+            "event_date": ev_date.isoformat(), "status": "confirmed", "trigger": "demo_seed",
+            "trigger_detail": f"DEMO SCENARIO (fictional): Heavy-rain event for Nahar wala khet on {ev_date.isoformat()}. "
+                             "Not a real weather alert or crop-loss report.",
             "confirmed_at": confirmed_at.isoformat(), "report_deadline": deadline.isoformat(),
-            "estimated_loss_quintals": 8, "farmer_notes": "Khet mein paani bhar gaya, dhaan gir gaya",
+            "estimated_loss_quintals": 8, "farmer_notes": "DEMO ONLY: Khet mein paani bhar gaya, dhaan gir gaya",
             "created_at": confirmed_at.isoformat()})
+        db.insert(conn, "alert", {
+            "alert_id": "A1", "event_id": "E1", "plot_id": "P2", "kind": "demo_scenario",
+            "message": f"DEMO SCENARIO (fictional): Heavy rain recorded near Nahar wala khet on "
+                       f"{ev_date.strftime('%d %b')}. This is not a real alert.",
+            "created_at": confirmed_at.isoformat(), "read": 0})
 
         photo_dir = settings.upload_dir / "photos"
         photo_dir.mkdir(parents=True, exist_ok=True)
@@ -108,8 +125,8 @@ def reset_db() -> dict:
             taken = datetime.combine(d, datetime.min.time(), settings.timezone).replace(hour=hour, minute=int(minute))
             db.insert(conn, "photo", {
                 "photo_id": pid, "season_id": "S2", "event_id": "E1", "taken_at": taken.isoformat(),
-                "lat": 26.9311 + i * 0.0001, "lon": 81.1919, "location_source": "exif",
-                "file_path": str(path), "vision_tag": "waterlogging", "vision_confidence": 0.8, "is_placeholder": 1})
+                "lat": 26.9311 + i * 0.0001, "lon": 81.1919, "location_source": "plot_pin",
+                "file_path": str(path), "vision_tag": None, "vision_confidence": None, "is_placeholder": 1})
     return counts()
 
 

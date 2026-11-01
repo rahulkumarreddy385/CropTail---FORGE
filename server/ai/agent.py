@@ -284,11 +284,11 @@ def fallback_answer(conn, question: str, plot_id: str | None) -> dict:
                         f"{target} पर आपने {out['count']} बार में {inr(out['total_cost'])} खर्च किए।")
     if answer is None:
         answer = _t(lang,
-                    "In demo mode I can answer: fertiliser this season vs last, cost per quintal, can I spray tomorrow, "
+                    "Without Gemini, I can answer: fertiliser this season vs last, cost per quintal, can I spray tomorrow, "
                     "profit at today's price, season summary, and prepare my claim file.",
-                    "Demo mode mein main ye bata sakta hoon: khad is season vs pichhla season, prati quintal lagat, "
+                    "Gemini ke bina main ye bata sakta hoon: khad is season vs pichhla season, prati quintal lagat, "
                     "kal spray kar sakte hain kya, aaj ke daam par munafa, season ka hisaab, claim file taiyaar karna.",
-                    "डेमो मोड में मैं ये बता सकता हूँ: खाद इस सीज़न बनाम पिछला, प्रति क्विंटल लागत, कल छिड़काव, "
+                    "Gemini के बिना मैं ये बता सकता हूँ: खाद इस सीज़न बनाम पिछला, प्रति क्विंटल लागत, कल छिड़काव, "
                     "आज के दाम पर मुनाफा, सीज़न का हिसाब, क्लेम फाइल तैयार करना।")
     spray = getattr(ctx, "last_spray", None)
     return {"answer": answer, "language": lang, "sources": ctx.sources, "tool_calls": ctx.calls, "mode": "fallback",
@@ -374,5 +374,5 @@ def ask(conn, question: str, plot_id: str | None = None) -> dict:
             out["notice"] = f"Gemini unavailable; using limited basic answers. {exc}"
             return out
     out = fallback_answer(conn, question, plot_id)
-    out["notice"] = "Gemini is not configured; using limited basic answers. Add LLM_API_KEY to server/.env."
+    out["notice"] = "Gemini is not configured; using limited basic answers. Add GEMINI_API_KEY to server/.env."
     return out

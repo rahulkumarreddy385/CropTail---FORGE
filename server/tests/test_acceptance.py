@@ -18,14 +18,18 @@ def test_health_fallback(client):
     body = r.json()
     assert body["status"] == "ok" and body["llm"] == "fallback"
     assert body["weather"] == body["satellite"] == body["mandi"] == "cached"
+    assert body["sample_data_enabled"] is True
+    assert body["demo_seed_loaded"] is True
 
 
 def test_reset_counts(client):
     r = client.post("/api/demo/reset")
     c = r.json()["counts"]
-    assert (c["farmer"], c["plot"], c["season"], c["entry"], c["event"]) == (1, 2, 3, 25, 1)
+    assert (c["farmer"], c["plot"], c["season"], c["entry"], c["event"]) == (1, 2, 3, 36, 1)
     ev = client.get("/api/events/E1").json()
-    assert ev["status"] == "confirmed"
+    assert ev["status"] == "confirmed" and ev["is_demo"] is True
+    assert ev["trigger"] == "demo_seed"
+    assert all(p["is_placeholder"] for p in ev["photos"])
 
 
 # ---------- AC3-AC8 metrics ----------
@@ -38,12 +42,26 @@ def test_season_metrics_s1(client):
 def test_season_metrics_s2(client):
     m = client.get("/api/seasons/S2/metrics").json()
     assert m["total_cost"] == 25600.00 and m["harvest_quintals"] == 40 and m["cost_per_quintal"] == 640.00
-    assert m["revenue"] == 0 and m["cost_by_category"]["fertiliser"] == 4600.00
+    assert m["revenue"] == 82800.00 and m["profit"] == 57200.00
+    assert m["cost_by_category"]["fertiliser"] == 4600.00
 
 
 def test_cost_per_quintal_null_without_harvest(client):
-    m = client.get("/api/seasons/S3/metrics").json()
+    season = client.post("/api/seasons", json={"plot_id": "P1", "crop": "tomato",
+                                               "season_label": "Test season", "sowing_date": "2026-10-30"}).json()
+    client.post("/api/entries", json={"season_id": season["season_id"], "entry_date": "2026-10-30",
+                                     "category": "fertiliser", "item": "compost", "cost_inr": 9500})
+    m = client.get(f"/api/seasons/{season['season_id']}/metrics").json()
     assert m["total_cost"] == 9500.00 and m["cost_per_quintal"] is None
+
+
+def test_tomato_demo_has_partial_harvest_and_sales(client):
+    m = client.get("/api/seasons/S3/metrics").json()
+    assert m["total_cost"] == 16500.00
+    assert m["harvest_quintals"] == 11
+    assert m["cost_per_quintal"] == 1500.00
+    assert m["revenue"] == 20800.00
+    assert m["profit"] == 4300.00
 
 
 def test_compare_seasons_fertiliser(conn):
@@ -65,7 +83,7 @@ def test_fallback_parser_urea_hindi(client):
     d = r["draft"]
     assert (d["category"], d["item"], d["quantity"], d["unit"], d["cost_inr"]) == ("fertiliser", "urea", 2, "bag", 900.0)
     assert r["resolved_plot_id"] == "P2" and d["entry_date"] == "2026-10-30" and r["mode"] == "fallback"
-    assert client.post("/api/demo/reset").json()["counts"]["entry"] == 25  # nothing saved by parse
+    assert client.post("/api/demo/reset").json()["counts"]["entry"] == 36  # nothing saved by parse
 
 
 def test_relative_date_kal(client):
@@ -77,9 +95,9 @@ def test_relative_date_kal(client):
                                              "quantity": d["quantity"], "unit": d["unit"], "cost_inr": d["cost_inr"],
                                              "source": "text"})
     assert save.status_code == 201
-    assert client.get("/api/seasons/S3/metrics").json()["total_cost"] == 10300.00
-    top = client.get("/api/entries", params={"season_id": "S3"}).json()["entries"][0]
-    assert top["category"] == "irrigation" and top["entry_date"] == "2026-10-29"
+    assert client.get("/api/seasons/S3/metrics").json()["total_cost"] == 17300.00
+    entries = client.get("/api/entries", params={"season_id": "S3"}).json()["entries"]
+    assert any(e["category"] == "irrigation" and e["entry_date"] == "2026-10-29" for e in entries)
 
 
 def test_parse_errors(client):
@@ -151,7 +169,7 @@ def test_monitor_creates_and_dedupes(client, monkeypatch):
     out = client.post("/api/monitor/run").json()
     assert len(out["new_events"]) == 1
     ev = out["new_events"][0]
-    assert ev["plot_id"] == "P1" and ev["type"] == "inundation" and ev["status"] == "suspected"
+    assert ev["plot_id"] == "P1" and ev["type"] == "unseasonal_rain_post_harvest" and ev["status"] == "suspected"
     assert "78.4 mm" in ev["alert_message"]
     again = client.post("/api/monitor/run").json()
     assert again["new_events"] == [] and again["skipped"][0]["reason"] == "skipped_duplicate"
@@ -210,6 +228,8 @@ def test_pack_contains_disclaimer_and_estimate(client):
     text = re.sub(r"\s+", " ", _pdf_text(client, body["file_url"]))
     for title in SECTION_TITLES:
         assert title in text, title
+    assert "DEMO SCENARIO ONLY" in text
+    assert "not evidence of real crop damage" in text
     assert "Farmer's estimate" in text and "₹18,400.00" in text
     assert re.sub(r"\s+", " ", DISCLAIMER) in text
     assert "78.4" in text  # fixture rainfall on the event day

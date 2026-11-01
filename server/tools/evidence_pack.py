@@ -179,6 +179,11 @@ def build_pdf(data: dict, path: Path) -> None:
 
     story += [P(SECTION_TITLES[0], "title"),
               P(f"Generated {settings.now().strftime('%d %b %Y, %H:%M')} IST · Pack ID {data['pack_id']}", "small")]
+    if ev.get("trigger") == "demo_seed":
+        story += [Spacer(1, 4), P(
+            "DEMO SCENARIO ONLY: the farmer, plot, ledger records, event, loss estimate and placeholder photos are "
+            "fictional. This document is not evidence of real crop damage and must not be submitted as a claim.",
+            "warn")]
     if data["countdown"]["past_deadline"]:
         story += [Spacer(1, 4), P("Reporting window passed. You can still generate the record, but contact your "
                                   "insurer or agriculture office directly.", "warn")]

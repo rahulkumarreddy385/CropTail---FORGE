@@ -80,7 +80,7 @@ Scope: a 48-hour hackathon MVP for a live demo with one seeded farmer, built end
 10. **F10 Satellite crop-health change**: Sentinel-2 NDVI for the plot before vs after an event, plus an NDVI time series for the season, with a cached fallback for demo plots.
 11. **F11 Evidence pack PDF**: one tap generates a PDF for a confirmed event: farmer/plot/crop details, ledger timeline, area weather vs normal, satellite before/after, photo timeline, farmer-entered loss estimate, disclaimer.
 12. **F12 Demo data and reset**: seeded farmer, plots, seasons and entries; one action resets to the seed.
-13. **F13 Health check**: reports server status and which integrations are live vs fallback.
+13. **F13 Health check**: reports server status, configured/observed integration modes, and whether synthetic sample fixtures are enabled.
 
 **Should-have**
 14. **F14 Photo log**: upload/capture a photo; store with timestamp and location; optional vision tag (`healthy`, `pest_damage`, `waterlogging`, `lodging`, `unclear`) shown as a hint, never a diagnosis.
@@ -168,7 +168,7 @@ All dates ISO `YYYY-MM-DD`, timestamps ISO 8601 with offset, currency INR (₹) 
 - **Open-Meteo Historical (archive) API**: observed daily weather for older dates and 1991-2020 normals. No key.
 - **Sentinel-2 L2A via Google Earth Engine**: NDVI with cloud masking. Credentials via `GEE_SERVICE_ACCOUNT_JSON`.
 - **Agmarknet mandi prices via data.gov.in API**: key `DATA_GOV_IN_API_KEY`, resource id `MANDI_RESOURCE_ID`; saved-real-data cache, sample fixtures opt-in only.
-- **LLM provider**: key `LLM_API_KEY`; optional (fallback mode without it).
+- **LLM provider**: key `GEMINI_API_KEY`; optional (fallback mode without it).
 - **NASA FIRMS** (N1 only): key `FIRMS_MAP_KEY`.
 
 #### Sample data (seed)
@@ -240,7 +240,7 @@ log text → **L1 parse** → confirm card → save Entry → **L2 metrics** on 
 2. Relative dates ("aaj", "kal", "today", "yesterday") are resolved by the server against the server's local date (Asia/Kolkata), not by the LLM. Missing date → today.
 3. `plot_hint` is matched to a plot name case-insensitively and by plot number ("plot 2" → second plot by creation order). If no match and the farmer has more than one plot, the confirm card asks the user to choose.
 4. Any null required field is listed in `missing_fields` and highlighted on the confirm card. Never guess a cost.
-5. **Fallback (no `LLM_API_KEY`)**: regex parser that extracts amounts after "₹" or "rs/rupaye", numbers + units (kg, bag, quintal), and category keywords in Hindi and English (e.g. "DAP/urea/khad" → fertiliser, "beej/seed" → seed, "spray/dawa" → pesticide, "majdoor/labour" → labour, "paani/irrigation" → irrigation, "katai/harvest" → harvest, "becha/sold" → sale). Anything unmatched → category `note`.
+5. **Fallback (no `GEMINI_API_KEY`)**: regex parser that extracts amounts after "₹" or "rs/rupaye", numbers + units (kg, bag, quintal), and category keywords in Hindi and English (e.g. "DAP/urea/khad" → fertiliser, "beej/seed" → seed, "spray/dawa" → pesticide, "majdoor/labour" → labour, "paani/irrigation" → irrigation, "katai/harvest" → harvest, "becha/sold" → sale). Anything unmatched → category `note`.
 
 Example: "Sowed wheat on plot 2, 50 kg DAP, ₹1,400" → `{category: fertiliser, item: "DAP", quantity: 50, unit: kg, cost_inr: 1400.00, plot_hint: "plot 2", entry_date: today}`.
 
@@ -310,7 +310,7 @@ The required claim fields must be copied by the team from the official PMFBY int
 - The answer must cite the tool results it used; the response includes `sources[]` the UI renders as chips.
 - Answers in the language of the question.
 - Refusals: pesticide/fertiliser dosage, disease diagnosis, legal or claim-eligibility questions → "Please check with your local Krishi Vigyan Kendra or agriculture office." Missing data → "I don't have a record of that in your ledger." Never guess.
-- **Fallback (no `LLM_API_KEY`)**: keyword intent router (Hindi + English) for six intents: fertiliser comparison, cost per quintal, spray check, profit at current price, season summary, prepare claim file. Each maps to a fixed tool sequence and a fixed answer template, e.g. "Fertiliser spend this season: ₹{cur}. Last season: ₹{prev}. Change: {pct}%." Unknown intent → "In demo mode I can answer: ..." listing the six.
+- **Fallback (no `GEMINI_API_KEY`)**: keyword intent router (Hindi + English) for six intents: fertiliser comparison, cost per quintal, spray check, profit at current price, season summary, prepare claim file. Each maps to a fixed tool sequence and a fixed answer template, e.g. "Fertiliser spend this season: ₹{cur}. Last season: ₹{prev}. Change: {pct}%." Unknown intent → "In demo mode I can answer: ..." listing the six.
 
 #### L11 Mandi price and benchmark
 - Price: latest record by date for crop + market; if older than 7 days show "as of {date}". Fallback to cached CSV marked `cached`.
@@ -375,7 +375,7 @@ Light theme; background #F7F5EF; primary accent #1F7A4D (green); warning #C77700
 - `POST /api/agent/ask` body `{question, plot_id?}` → `{answer, language, sources: [{type, label, ref}], tool_calls: [{tool, args, ok}], mode: "llm"|"fallback", stopped_at_cap: boolean}`
 - `POST /api/monitor/run` → `{checked_plots, new_events: [Event], mode}`
 - `POST /api/events/{id}/evidence-pack` → `{pack_id, file_url, data_sources: [{name, mode, fetched_at}]}`
-- `GET /api/health` → `{status: "ok", llm: "live"|"fallback", weather: "live"|"cached", satellite: "live"|"cached", mandi: "live"|"cached"}`
+- `GET /api/health` → `{status: "ok", llm, weather, satellite, mandi, sample_data_enabled, demo_seed_loaded, simulation_allowed, today}`. Integration values distinguish `configured` (not yet verified), `live`, `cached`, `unavailable`, or `fallback` as applicable; `demo_seed_loaded` indicates fictional seed entries remain in the ledger.
 
 ## 8. Error handling and edge cases
 
@@ -387,7 +387,7 @@ Light theme; background #F7F5EF; primary accent #1F7A4D (green); warning #C77700
 | E2 | Log text > 500 chars | 422 | "Please keep each log under 500 characters." |
 | E3 | Parser cannot extract anything | 200, category `note`, all fields in `missing_fields` | Confirm card with fields to fill in manually |
 | E4 | LLM key missing | Fallback parser/agent, `mode: fallback` | "Demo mode" pill; features still work |
-| E5 | LLM call fails or times out (20 s) or returns invalid JSON | Retry once automatically, then fallback | Amber note: "Smart reading unavailable, used basic reading. Please check the fields." |
+| E5 | LLM call fails or times out (20 s) or returns invalid JSON | Retry transient provider/network failures with exponential backoff (up to 3 attempts), then fallback; do not retry permanent client errors | Show a clear basic-answer notice with the provider failure reason |
 | E6 | Photo > 8 MB | 413 | "Please use a photo smaller than 8 MB." |
 | E7 | Unsupported file type | 415 | "Only JPG, PNG or HEIC photos are supported." |
 | E8 | Plot ambiguous or not found in log | 200, `resolved_plot_id: null` | Confirm card asks "Which plot?" with plot buttons |
@@ -462,13 +462,14 @@ Light theme; background #F7F5EF; primary accent #1F7A4D (green); warning #C77700
 #### Environment variables
 | Name | Default | Purpose |
 |---|---|---|
-| `LLM_API_KEY` | empty | Empty → fallback mode |
-| `LLM_MODEL` | `gemini-2.5-flash` | Gemini model name |
+| `GEMINI_API_KEY` | empty | Gemini API key; empty → fallback mode |
+| `LLM_API_KEY` | empty | Deprecated compatibility alias for `GEMINI_API_KEY` |
+| `LLM_MODEL` | `gemini-3.8-flash` | Gemini model name |
 | `LLM_BASE_URL` | Gemini API URL | Gemini API base URL |
 | `CLIENT_ORIGIN` | `http://localhost:3000` | Allowed client origin for CORS |
 | `SERVER_URL` | `http://localhost:8000` | Server URL used by the client proxy |
 | `USE_CACHED_DATA` | `false` | Avoid live requests and use saved data |
-| `ALLOW_SAMPLE_FIXTURES` | `false` | Explicitly allow fictional fixture data (offline demos/tests only) |
+| `ALLOW_SAMPLE_FIXTURES` | `false` | Permit fictional fixtures only with `USE_CACHED_DATA=true` (offline demos/tests only) |
 | `DATA_GOV_IN_API_KEY` | empty | Mandi prices |
 | `MANDI_RESOURCE_ID` | empty | data.gov.in dataset id |
 | `GEE_SERVICE_ACCOUNT_JSON` | empty | Path to Earth Engine credentials |
@@ -483,7 +484,7 @@ Light theme; background #F7F5EF; primary accent #1F7A4D (green); warning #C77700
 | `TIMEZONE` | Asia/Kolkata | Date resolution |
 
 #### Integrations
-Open-Meteo (forecast + archive), Google Earth Engine (Sentinel-2 L2A), and data.gov.in Agmarknet are wired. Live responses are cached by request; fictional fixtures are available only when `ALLOW_SAMPLE_FIXTURES=true`. No live benchmark source or NASA FIRMS integration is configured.
+Open-Meteo (forecast + archive), Google Earth Engine (Sentinel-2 L2A), and data.gov.in Agmarknet are wired. Live responses are cached by request; fictional fixtures are available only when both `USE_CACHED_DATA=true` and `ALLOW_SAMPLE_FIXTURES=true`. Health reports `configured` until an integration request has run; it does not probe third-party services. No live benchmark source or NASA FIRMS integration is configured.
 
 #### Constraints
 - Built in 48 hours by a small team: must-haves first; cut order if late: N1-N4, F17, F16, F15, F14.
@@ -496,11 +497,11 @@ Open-Meteo (forecast + archive), Google Earth Engine (Sentinel-2 L2A), and data.
 ### Acceptance criteria and test examples
 
 #### Must pass in fallback mode (no LLM key, `USE_CACHED_DATA=true`, `ALLOW_SAMPLE_FIXTURES=true`, tests use a fixed clock of 2026-10-30 10:00 IST)
-- **AC1** `GET /api/health` returns 200 with `status: "ok"`, `llm: "fallback"`, and `weather/satellite/mandi: "cached"`.
-- **AC2** After `POST /api/demo/reset`, the database has 1 farmer, 2 plots, 3 seasons, 25 entries, 1 event (E1, `confirmed`).
+- **AC1** `GET /api/health` returns 200 with `status: "ok"`, `llm: "fallback"`, `weather/satellite/mandi: "cached"`, and `sample_data_enabled: true`.
+- **AC2** After `POST /api/demo/reset`, the database has 1 farmer, 2 plots, 3 seasons, 36 entries, 1 demo scenario (E1, `confirmed`).
 - **AC3** `GET /api/seasons/S1/metrics` returns `total_cost` 23000.00, `harvest_quintals` 46, `cost_per_quintal` 500.00, `revenue` 105800.00, `profit` 82800.00.
-- **AC4** `GET /api/seasons/S2/metrics` returns `total_cost` 25600.00, `harvest_quintals` 40, `cost_per_quintal` 640.00, `revenue` 0, and `cost_by_category.fertiliser` 4600.00.
-- **AC5** `GET /api/seasons/S3/metrics` returns `total_cost` 9500.00 and `cost_per_quintal` null.
+- **AC4** `GET /api/seasons/S2/metrics` returns `total_cost` 25600.00, `harvest_quintals` 40, `cost_per_quintal` 640.00, `revenue` 82800.00, `profit` 57200.00, and `cost_by_category.fertiliser` 4600.00.
+- **AC5** The tomato demo season S3 has `total_cost` 16500.00, `harvest_quintals` 11, `cost_per_quintal` 1500.00, `revenue` 20800.00, and `profit` 4300.00. A separate season without a harvest has null `cost_per_quintal`.
 - **AC6** `compare_seasons(P2, paddy, fertiliser)` returns current 4600.00, previous 4400.00, `change_pct` 4.5.
 - **AC7** `compare_seasons(P2, paddy, cost_per_quintal)` returns current 640.00, previous 500.00, `change_pct` 28.0.
 - **AC8** `projected_profit(S2, 2300)` returns 66400.00.

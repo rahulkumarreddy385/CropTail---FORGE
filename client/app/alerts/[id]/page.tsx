@@ -98,6 +98,13 @@ export default function EventPage() {
         </div>
       </div>
       <ErrorBanner key={error || ""} message={error} onClose={() => setError(null)} />
+      {ev.is_demo && (
+        <Note tone="amber">
+          {lang === "hi"
+            ? "यह काल्पनिक डेमो घटना है। फोटो प्लेसहोल्डर हैं; इस रिकॉर्ड को असली नुकसान या बीमा दावे के लिए इस्तेमाल न करें।"
+            : "Fictional demo event. Photos are placeholders; do not use this record as real loss or insurance-claim evidence."}
+        </Note>
+      )}
       <Card>
         <p>{ev.trigger_detail}</p>
         <div className="mt-2 flex gap-2 flex-wrap">

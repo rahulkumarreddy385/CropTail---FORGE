@@ -76,6 +76,7 @@ export type ParsedEntry = {
 export type EventT = {
   event_id: string; plot_id: string; plot_name: string; season_id: string | null; type: string; event_date: string;
   status: "suspected" | "confirmed" | "dismissed"; trigger: string; trigger_detail: string;
+  is_demo?: boolean;
   report_deadline: string; seconds_left: number; past_deadline: boolean; estimated_loss_quintals: number | null;
   farmer_notes: string | null; alert_message: string | null;
   packs: { pack_id: string; generated_at: string; file_url: string; past_deadline: number }[];
@@ -88,5 +89,5 @@ export type AskResult = {
 };
 export type Health = {
   status: string; llm: "live" | "configured" | "unavailable" | "fallback"; weather: string; satellite: string; mandi: string;
-  simulation_allowed: boolean; today: string;
+  sample_data_enabled: boolean; demo_seed_loaded: boolean; simulation_allowed: boolean; today: string;
 };

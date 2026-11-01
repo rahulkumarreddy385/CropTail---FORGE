@@ -70,7 +70,15 @@ export default function HomePage() {
 
       <ErrorBanner message={error} onClose={() => setError(null)} />
 
-      {suspected.map((e) => (
+        {health?.demo_seed_loaded && (
+          <Note tone="amber">
+            {lang === "hi"
+              ? "डेमो प्रोफ़ाइल: किसान, खेत, हिसाब और नुकसान की घटना काल्पनिक हैं। यह दावा या आपके खेत का असली रिकॉर्ड नहीं है।"
+              : "Demo profile: the farmer, plots, ledger and loss event are fictional. This is not your farm record or real claim evidence."}
+          </Note>
+        )}
+
+        {suspected.map((e) => (
         <div key={e.event_id} className="rounded-card border-2 border-warn bg-warn-soft p-4">
           <div className="flex gap-2 items-start">
             <CloudRain className="text-warn shrink-0" />
@@ -85,6 +93,7 @@ export default function HomePage() {
 
       {open.map((e) => (
         <Card key={e.event_id} className="border-info">
+          {e.is_demo && <Chip tone="amber" className="mb-2">{lang === "hi" ? "काल्पनिक डेमो" : "Fictional demo"}</Chip>}
           <div className="flex items-center justify-between gap-2">
             <div>
               <p className="text-[14px] text-muted">{e.plot_name} · {shortDate(e.event_date, lang)}</p>
@@ -137,7 +146,14 @@ export default function HomePage() {
         );
       })}
 
-      {health?.weather === "cached" && (
+      {health?.sample_data_enabled && (
+        <Note tone="amber">
+          {lang === "hi"
+            ? "डेमो नमूना डेटा चालू है; कुछ मौसम, उपग्रह या मंडी डेटा वास्तविक नहीं हो सकता।"
+            : "Demo sample data is enabled; some weather, satellite or mandi data may be synthetic."}
+        </Note>
+      )}
+      {!health?.sample_data_enabled && health?.weather === "cached" && (
         <Note tone="grey">{lang === "hi" ? "पहले से सहेजा गया वास्तविक डेटा दिखाया जा रहा है।" : "Showing previously saved real data where available."}</Note>
       )}
 

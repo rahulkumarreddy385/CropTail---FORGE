@@ -1,9 +1,10 @@
 """The only place that talks to Gemini's generateContent API over HTTP.
 
-Every function raises LLMUnavailable when no key is configured or the call fails after one retry;
+Every function raises LLMUnavailable when no key is configured or the call fails after bounded retries;
 callers then switch to the deterministic fallback (spec E4/E5).
 """
 import json
+import random
 import re
 import time
 
@@ -12,6 +13,7 @@ import httpx
 from config.settings import settings
 
 TIMEOUT_S = 20
+MAX_ATTEMPTS = 3
 _LAST_STATUS = "configured"
 
 
@@ -31,11 +33,14 @@ def _failure_message(exc: Exception) -> str:
     if isinstance(exc, httpx.HTTPStatusError) and exc.response is not None:
         status = exc.response.status_code
         if status in (401, 403):
-            return f"Gemini rejected the API key or access (HTTP {status}). Check LLM_API_KEY and model access."
+            return f"Gemini rejected the API key or access (HTTP {status}). Check GEMINI_API_KEY and model access."
         if status == 404:
             return "Gemini could not find the configured model. Check LLM_MODEL."
         if status == 429:
             return "Gemini rate or quota limit reached. Check the API quota and try again later."
+        if status in (500, 502, 503, 504):
+            return (f"Gemini is temporarily unavailable (HTTP {status}); this is a Google service issue, "
+                    "not an invalid-key error. Please try again shortly.")
         return f"Gemini rejected the request (HTTP {status}). Check the model and request configuration."
     return "Could not reach Gemini or read its response. Check the network and Gemini API availability."
 
@@ -100,7 +105,10 @@ def messages(system: str, msgs: list[dict], tools: list[dict] | None = None, max
     body = {
         "systemInstruction": {"parts": [{"text": system}]},
         "contents": _gemini_contents(msgs),
-        "generationConfig": {"maxOutputTokens": max_tokens},
+        "generationConfig": {
+            "maxOutputTokens": max_tokens,
+            "thinkingConfig": {"thinkingLevel": "low"},
+        },
     }
     if tools:
         body["tools"] = [{"functionDeclarations": [{
@@ -110,7 +118,7 @@ def messages(system: str, msgs: list[dict], tools: list[dict] | None = None, max
         } for tool in tools]}]
     headers = {"x-goog-api-key": settings.llm_api_key, "content-type": "application/json"}
     last = None
-    for attempt in range(2):
+    for attempt in range(MAX_ATTEMPTS):
         try:
             r = httpx.post(f"{settings.llm_base_url}/models/{settings.llm_model}:generateContent",
                            json=body, headers=headers, timeout=TIMEOUT_S)
@@ -147,8 +155,8 @@ def messages(system: str, msgs: list[dict], tools: list[dict] | None = None, max
             raise
         except Exception as exc:
             last = exc
-            if attempt == 0:
-                time.sleep(2)
+            if attempt + 1 < MAX_ATTEMPTS:
+                time.sleep((2 ** attempt) + random.uniform(0, 0.25))
     _LAST_STATUS = "unavailable"
     raise LLMUnavailable(_failure_message(last))
 

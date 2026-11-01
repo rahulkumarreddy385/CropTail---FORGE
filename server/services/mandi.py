@@ -27,9 +27,12 @@ def get_price(crop: str, market: str) -> dict | None:
     commodity = MANDI_COMMODITY.get(crop)
     if live_ok and commodity:
         try:
+            params = {"api-key": settings.data_gov_in_api_key, "format": "json", "limit": 100,
+                      "filters[commodity]": commodity}
+            if market:
+                params["filters[market]"] = market
             raw = get_json(API.format(rid=settings.mandi_resource_id),
-                           {"api-key": settings.data_gov_in_api_key, "format": "json", "limit": 100,
-                            "filters[commodity]": commodity, "filters[market]": market})
+                           params)
             recs = raw.get("records", [])
             if recs:
                 def d(r):
@@ -46,7 +49,7 @@ def get_price(crop: str, market: str) -> dict | None:
     if cached:
         LAST_MODE["mandi"] = "cached"
         return {**cached["payload"], "mode": "cached"}
-    if settings.allow_sample_fixtures:
+    if settings.sample_data_enabled:
         LAST_MODE["mandi"] = "cached"
         return _fixture_price(crop, market)
     LAST_MODE["mandi"] = "unavailable"
@@ -54,7 +57,7 @@ def get_price(crop: str, market: str) -> dict | None:
 
 
 def get_benchmark(crop: str, state: str) -> dict | None:
-    if not settings.allow_sample_fixtures:
+    if not settings.sample_data_enabled:
         return None
     with open(FIXTURES / "benchmarks.csv") as f:
         rows = [r for r in csv.DictReader(f)

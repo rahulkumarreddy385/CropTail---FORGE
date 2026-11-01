@@ -18,7 +18,7 @@ def env(tmp_path, monkeypatch):
     monkeypatch.setenv("DISABLE_SCHEDULER", "true")
     monkeypatch.setenv("ALLOW_SIMULATION", "true")
     monkeypatch.setenv("DEMO_EVENT_DATE", "2026-10-14")
-    for k in ("LLM_API_KEY", "GEE_SERVICE_ACCOUNT_JSON", "DATA_GOV_IN_API_KEY", "MANDI_RESOURCE_ID"):
+    for k in ("LLM_API_KEY", "GEMINI_API_KEY", "GEE_SERVICE_ACCOUNT_JSON", "DATA_GOV_IN_API_KEY", "MANDI_RESOURCE_ID"):
         monkeypatch.setenv(k, "")
     from seed import seed
     seed.reset_db()
