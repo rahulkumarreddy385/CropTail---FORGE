@@ -52,8 +52,10 @@ def test_hosted_password_login_protects_api(client, monkeypatch):
 
 
 def test_production_requires_strong_auth_settings(monkeypatch):
-    from main import validate_production_config
+    from main import _normalize_origin, validate_production_config
 
+    assert _normalize_origin("croptrail-client.onrender.com") == "https://croptrail-client.onrender.com"
+    assert _normalize_origin("http://localhost:3000") == "http://localhost:3000"
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("APP_PASSWORD", "")
     monkeypatch.setenv("SESSION_SECRET", "")

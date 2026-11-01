@@ -25,7 +25,7 @@ services:
         fromService:
           type: web
           name: croptrail-client
-          property: url
+          property: host
       - key: APP_PASSWORD
         sync: false
       - key: SESSION_SECRET
@@ -51,4 +51,4 @@ services:
         fromService:
           type: web
           name: croptrail-server
-          property: url
+          property: host

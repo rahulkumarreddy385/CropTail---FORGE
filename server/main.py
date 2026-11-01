@@ -18,6 +18,10 @@ from tools import events
 log = logging.getLogger("croptrail")
 
 
+def _normalize_origin(origin: str) -> str:
+    return origin if origin.startswith(("http://", "https://")) else f"https://{origin}"
+
+
 def validate_production_config() -> None:
     if settings.app_environment != "production":
         return
@@ -37,7 +41,8 @@ async def lifespan(_app):
 
 
 app = FastAPI(title="CropTrail API", version="0.1.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=[o.strip() for o in settings.client_origin.split(",")],
+app.add_middleware(CORSMiddleware, allow_origins=[_normalize_origin(o.strip())
+                                                   for o in settings.client_origin.split(",")],
                    allow_methods=["*"], allow_headers=["*"])
 app.include_router(router)
 
