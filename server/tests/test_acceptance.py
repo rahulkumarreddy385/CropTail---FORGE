@@ -243,6 +243,13 @@ def test_agent_fertiliser_compare(client):
 def test_agent_refuses_dosage(client):
     r = client.post("/api/agent/ask", json={"question": "Tamatar par kitni dawa daalun?"}).json()
     assert "agriculture office" in r["answer"] and not re.search(r"\d", r["answer"])
+    assert r["mode"] == "safety"
+
+
+def test_agent_discloses_basic_mode_without_gemini_key(client):
+    r = client.post("/api/agent/ask", json={"question": "Tell me about my farm"}).json()
+    assert r["mode"] == "fallback"
+    assert "Gemini is not configured" in r["notice"]
 
 
 def test_agent_missing_record(client):

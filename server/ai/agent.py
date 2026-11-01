@@ -320,7 +320,10 @@ def llm_answer(conn, question: str, plot_id: str | None) -> dict:
         resp = llm.messages(system, msgs, tools=tools, max_tokens=900)
         uses = [b for b in resp.get("content", []) if b.get("type") == "tool_use"]
         if not uses:
-            return {"answer": llm.text_of(resp), "sources": sources, "tool_calls": calls, "pending_action": pending,
+            answer = llm.text_of(resp)
+            if not answer:
+                raise llm.LLMUnavailable("Gemini returned an empty answer.")
+            return {"answer": answer, "sources": sources, "tool_calls": calls, "pending_action": pending,
                     "stopped_at_cap": False, "spray": spray}
         msgs.append({"role": "assistant", "content": resp["content"]})
         results = []
@@ -360,14 +363,16 @@ def ask(conn, question: str, plot_id: str | None = None) -> dict:
     safe = safety_reply(question)
     if safe:
         return {"answer": safe, "language": lang, "sources": [], "tool_calls": [],
-                "mode": "llm" if llm.enabled() else "fallback", "stopped_at_cap": False, "pending_action": None,
+                "mode": "safety", "stopped_at_cap": False, "pending_action": None,
                 "spray": None}
     if llm.enabled():
         try:
             out = llm_answer(conn, question, plot_id)
             return {**out, "language": lang, "mode": "llm"}
-        except llm.LLMUnavailable:
+        except llm.LLMUnavailable as exc:
             out = fallback_answer(conn, question, plot_id)
-            out["notice"] = "Smart answers unavailable, used demo mode."
+            out["notice"] = f"Gemini unavailable; using limited basic answers. {exc}"
             return out
-    return fallback_answer(conn, question, plot_id)
+    out = fallback_answer(conn, question, plot_id)
+    out["notice"] = "Gemini is not configured; using limited basic answers. Add LLM_API_KEY to server/.env."
+    return out

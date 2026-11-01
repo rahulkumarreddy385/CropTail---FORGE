@@ -100,6 +100,13 @@ export default function AskPage() {
           <div key={i} className="ml-10 rounded-card rounded-br-md bg-primary text-white p-3">{m.text}</div>
         ) : (
           <div key={i} className="mr-6 rounded-card rounded-bl-md bg-white border border-line p-3">
+            {m.result && (
+              <Chip tone={m.result.mode === "llm" ? "green" : m.result.mode === "safety" ? "blue" : "amber"} className="mb-2">
+                {m.result.mode === "llm" ? "Gemini" : m.result.mode === "safety"
+                  ? lang === "hi" ? "सुरक्षा जवाब" : "Safety response"
+                  : lang === "hi" ? "सीमित जवाब" : "Basic answers"}
+              </Chip>
+            )}
             {m.result?.spray && (
               <div className="mb-2"><Chip tone={verdictTone[m.result.spray.verdict]}>{verdictText[m.result.spray.verdict]}</Chip></div>
             )}

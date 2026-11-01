@@ -61,7 +61,14 @@ function Inner({ children }: { children: React.ReactNode }) {
           </Link>
           <div className="flex-1" />
           {health?.llm === "fallback" && (
-            <span className="rounded-full bg-[#E4E1D8] text-muted text-[12px] font-semibold px-2.5 py-1">{t("demoMode")}</span>
+            <span className="rounded-full bg-[#E4E1D8] text-muted text-[12px] font-semibold px-2.5 py-1">
+              {lang === "hi" ? "सीमित जवाब" : "Basic answers"}
+            </span>
+          )}
+          {health?.llm === "unavailable" && (
+            <span className="rounded-full bg-red-100 text-danger text-[12px] font-semibold px-2.5 py-1">
+              {lang === "hi" ? "AI अनुपलब्ध" : "AI unavailable"}
+            </span>
           )}
           <button onClick={() => setLang(lang === "hi" ? "en" : "hi")}
             className="min-h-[40px] rounded-full border border-line bg-white px-3 text-[14px] font-semibold" aria-label="Switch language">

@@ -12,6 +12,7 @@ import httpx
 from config.settings import settings
 
 TIMEOUT_S = 20
+_LAST_STATUS = "configured"
 
 
 class LLMUnavailable(Exception):
@@ -20,6 +21,23 @@ class LLMUnavailable(Exception):
 
 def enabled() -> bool:
     return bool(settings.llm_api_key)
+
+
+def provider_status() -> str:
+    return _LAST_STATUS if enabled() else "fallback"
+
+
+def _failure_message(exc: Exception) -> str:
+    if isinstance(exc, httpx.HTTPStatusError) and exc.response is not None:
+        status = exc.response.status_code
+        if status in (401, 403):
+            return f"Gemini rejected the API key or access (HTTP {status}). Check LLM_API_KEY and model access."
+        if status == 404:
+            return "Gemini could not find the configured model. Check LLM_MODEL."
+        if status == 429:
+            return "Gemini rate or quota limit reached. Check the API quota and try again later."
+        return f"Gemini rejected the request (HTTP {status}). Check the model and request configuration."
+    return "Could not reach Gemini or read its response. Check the network and Gemini API availability."
 
 
 def _gemini_schema(schema: dict) -> dict:
@@ -76,6 +94,7 @@ def _gemini_contents(msgs: list[dict]) -> list[dict]:
 
 
 def messages(system: str, msgs: list[dict], tools: list[dict] | None = None, max_tokens: int = 1024) -> dict:
+    global _LAST_STATUS
     if not enabled():
         raise LLMUnavailable("no key")
     body = {
@@ -96,11 +115,15 @@ def messages(system: str, msgs: list[dict], tools: list[dict] | None = None, max
             r = httpx.post(f"{settings.llm_base_url}/models/{settings.llm_model}:generateContent",
                            json=body, headers=headers, timeout=TIMEOUT_S)
             if 400 <= r.status_code < 500 and r.status_code != 429:
-                raise LLMUnavailable(f"LLM request rejected ({r.status_code})")
+                _LAST_STATUS = "unavailable"
+                raise LLMUnavailable(_failure_message(httpx.HTTPStatusError(
+                    "Gemini rejected request", request=r.request, response=r,
+                )))
             r.raise_for_status()
             payload = r.json()
             candidates = payload.get("candidates") or []
             if not candidates or not candidates[0].get("content"):
+                _LAST_STATUS = "unavailable"
                 raise LLMUnavailable("Gemini returned no candidate")
             content = []
             for part in candidates[0]["content"].get("parts", []):
@@ -114,6 +137,11 @@ def messages(system: str, msgs: list[dict], tools: list[dict] | None = None, max
                         "name": call["name"],
                         "input": call.get("args") or {},
                     })
+            if not any(block["type"] == "tool_use" or block["text"].strip()
+                       for block in content):
+                _LAST_STATUS = "unavailable"
+                raise LLMUnavailable("Gemini returned no text or function call.")
+            _LAST_STATUS = "live"
             return {"content": content}
         except LLMUnavailable:
             raise
@@ -121,7 +149,8 @@ def messages(system: str, msgs: list[dict], tools: list[dict] | None = None, max
             last = exc
             if attempt == 0:
                 time.sleep(2)
-    raise LLMUnavailable(str(last))
+    _LAST_STATUS = "unavailable"
+    raise LLMUnavailable(_failure_message(last))
 
 
 def text_of(resp: dict) -> str:

@@ -82,11 +82,11 @@ export type EventT = {
 };
 export type Source = { type: string; label: string; ref: any; mode?: string };
 export type AskResult = {
-  answer: string; language: string; sources: Source[]; mode: "llm" | "fallback"; stopped_at_cap: boolean;
+  answer: string; language: string; sources: Source[]; mode: "llm" | "fallback" | "safety"; stopped_at_cap: boolean;
   pending_action: { type: string; event_id: string } | null; notice?: string;
   spray: { verdict: "ok" | "not_advised" | "caution"; reasons: string[]; best_window: { start: string; end: string } | null } | null;
 };
 export type Health = {
-  status: string; llm: "live" | "fallback"; weather: string; satellite: string; mandi: string;
+  status: string; llm: "live" | "configured" | "unavailable" | "fallback"; weather: string; satellite: string; mandi: string;
   simulation_allowed: boolean; today: string;
 };

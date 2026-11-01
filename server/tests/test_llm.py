@@ -58,6 +58,7 @@ def test_gemini_request_and_function_response(monkeypatch):
     assert request["json"]["contents"][0]["parts"][0]["inlineData"] == {
         "mimeType": "image/jpeg", "data": "aGVsbG8=",
     }
+    assert llm.provider_status() == "live"
     declaration = request["json"]["tools"][0]["functionDeclarations"][0]
     assert declaration["parameters"] == {
         "type": "OBJECT",
@@ -78,3 +79,26 @@ def test_gemini_request_and_function_response(monkeypatch):
     assert history[2]["parts"][0]["functionResponse"] == {
         "name": "lookup", "id": "call-1", "response": {"result": "Two records."},
     }
+
+
+def test_gemini_auth_failure_is_actionable_without_exposing_response(monkeypatch):
+    monkeypatch.setenv("LLM_API_KEY", "test-key")
+
+    class Response:
+        status_code = 403
+        request = llm.httpx.Request("POST", "https://example.test")
+
+        def raise_for_status(self):
+            raise llm.httpx.HTTPStatusError("forbidden", request=self.request, response=self)
+
+    monkeypatch.setattr(llm.httpx, "post", lambda *args, **kwargs: Response())
+
+    try:
+        llm.messages("System", [{"role": "user", "content": "Question"}])
+    except llm.LLMUnavailable as exc:
+        assert "Check LLM_API_KEY and model access" in str(exc)
+        assert "test-key" not in str(exc)
+    else:
+        raise AssertionError("Expected Gemini authorization failure")
+
+    assert llm.provider_status() == "unavailable"

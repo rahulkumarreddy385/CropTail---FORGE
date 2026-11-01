@@ -40,7 +40,7 @@ def _plot_or_404(conn, plot_id):
 @router.get("/health")
 def health():
     sample_mode = settings.use_cached_data and settings.allow_sample_fixtures
-    return {"status": "ok", "llm": "live" if llm.enabled() else "fallback",
+    return {"status": "ok", "llm": llm.provider_status(),
             "weather": "cached" if sample_mode else
             ("unavailable" if settings.use_cached_data else LAST_MODE.get("weather", "live")),
             "satellite": "cached" if sample_mode else
